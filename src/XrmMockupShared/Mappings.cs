@@ -53,7 +53,8 @@ namespace DG.Tools.XrmMockup {
         {
             { "between", ConditionOperator.Between },
             { "eq", ConditionOperator.Equal },
-            { "eq-businessid", ConditionOperator.EqualBusinessId },
+			{ "neq", ConditionOperator.NotEqual },
+			{ "eq-businessid", ConditionOperator.EqualBusinessId },
             { "eq-userid", ConditionOperator.EqualUserId },
             { "eq-userteams", ConditionOperator.EqualUserTeams },
             { "ge", ConditionOperator.GreaterEqual },
