@@ -526,7 +526,8 @@ namespace DG.Tools.XrmMockup {
                 throw new FaultException($"Call to action '{request.RequestName}' but no all required input arguments were provided");
             }
 
-            var entity = db.GetEntityOrNull(request.Parameters["Target"] as EntityReference).CloneEntity();
+            request.Parameters.TryGetValue("Target", out var target);
+            var entity = db.GetEntityOrNull(target as EntityReference).CloneEntity();
 
             var inputs = workflow.Input.Where(a => request.Parameters.ContainsKey(a.Name))
                 .Select(a => new KeyValuePair<string, object>(a.Name, request.Parameters[a.Name]));
