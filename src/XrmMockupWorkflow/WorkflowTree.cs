@@ -106,18 +106,23 @@ namespace WorkflowExecuter {
 
         public WorkflowTree Execute(Entity primaryEntity, TimeSpan timeOffset, 
             IOrganizationService orgService, IOrganizationServiceFactory factory, ITracingService trace) {
-            if (primaryEntity.Id == Guid.Empty) {
-                throw new WorkflowException("The primary entity must have an id");
-            }
             Reset();
-            Variables["InputEntities(\"primaryEntity\")"] = primaryEntity;
             Variables["ExecutionTime"] = DateTime.Now.Add(timeOffset);
-            var transactioncurrencyid = "transactioncurrencyid";
-            if (primaryEntity.Attributes.ContainsKey(transactioncurrencyid)) {
-                var currencyRef = primaryEntity.GetAttributeValue<EntityReference>(transactioncurrencyid);
-                var exchangerate = "exchangerate";
-                var currency = orgService.Retrieve("transactioncurrency", currencyRef.Id, new ColumnSet(exchangerate));
-                Variables["ExchangeRate"] = currency[exchangerate];
+            if (primaryEntity != null)
+            {
+                if (primaryEntity.Id == Guid.Empty)
+                {
+                    throw new WorkflowException("The primary entity must have an id");
+                }
+                Variables["InputEntities(\"primaryEntity\")"] = primaryEntity;
+                var transactioncurrencyid = "transactioncurrencyid";
+                if (primaryEntity.Attributes.ContainsKey(transactioncurrencyid))
+                {
+                    var currencyRef = primaryEntity.GetAttributeValue<EntityReference>(transactioncurrencyid);
+                    var exchangerate = "exchangerate";
+                    var currency = orgService.Retrieve("transactioncurrency", currencyRef.Id, new ColumnSet(exchangerate));
+                    Variables["ExchangeRate"] = currency[exchangerate];
+                }
             }
             StartActivity.Execute(ref Variables, timeOffset, orgService, factory, trace);
             return this;
