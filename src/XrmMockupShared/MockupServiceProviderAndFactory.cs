@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using XrmMockupShared;
 
 namespace DG.Tools.XrmMockup {
 
@@ -16,6 +17,7 @@ namespace DG.Tools.XrmMockup {
         private Core core;
         private ITracingService tracingService;
         private PluginContext pluginContext;
+        private IServiceEndpointNotificationService notificationService;
 
         /// <summary>
         /// Creates new MockupServiceProviderAndFactory object
@@ -23,10 +25,11 @@ namespace DG.Tools.XrmMockup {
         /// <param name="core"></param>
         public MockupServiceProviderAndFactory(Core core) : this(core, null, new TracingService()) { }
 
-        internal MockupServiceProviderAndFactory(Core core, PluginContext pluginContext, ITracingService tracingService) {
+        internal MockupServiceProviderAndFactory(Core core, PluginContext pluginContext, ITracingService tracingService, IServiceEndpointNotificationService notificationService = null) {
             this.core = core;
             this.pluginContext = pluginContext;
             this.tracingService = tracingService;
+            this.notificationService = notificationService;
         }
 
         /// <summary>
@@ -37,6 +40,7 @@ namespace DG.Tools.XrmMockup {
         public object GetService(Type serviceType) {
             if (serviceType == typeof(IPluginExecutionContext)) return this.pluginContext;
             if (serviceType == typeof(ITracingService)) return this.tracingService;
+            if (serviceType == typeof(IServiceEndpointNotificationService)) return this.notificationService;
             if (serviceType == typeof(IOrganizationServiceFactory)) return this;
             return null;
         }
@@ -60,6 +64,10 @@ namespace DG.Tools.XrmMockup {
 
         public IOrganizationService CreateAdminOrganizationService(MockupServiceSettings settings) {
             return new MockupService(core, null, this.pluginContext, settings);
+        }
+
+        public IServiceEndpointNotificationService CreateNotificationService(){
+            return new MockupNotificationService();
         }
     }
 }

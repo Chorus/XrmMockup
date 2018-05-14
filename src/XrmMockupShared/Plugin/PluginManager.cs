@@ -10,6 +10,7 @@ using Microsoft.Xrm.Sdk.Query;
 using System.ServiceModel;
 using Microsoft.Xrm.Sdk.Metadata;
 using System.Runtime.ExceptionServices;
+using XrmMockupShared;
 
 namespace DG.Tools.XrmMockup {
 
@@ -267,7 +268,7 @@ namespace DG.Tools.XrmMockup {
                 }
 
                 // Create service provider and execute the plugin
-                MockupServiceProviderAndFactory provider = new MockupServiceProviderAndFactory(core, thisPluginContext, new TracingService());
+                MockupServiceProviderAndFactory provider = new MockupServiceProviderAndFactory(core, thisPluginContext, new TracingService(), new MockupNotificationService());
                 try {
                     pluginExecute(provider);
                 } catch (TargetInvocationException e) {
