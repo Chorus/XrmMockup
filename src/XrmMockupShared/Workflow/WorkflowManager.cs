@@ -109,6 +109,10 @@ namespace DG.Tools.XrmMockup {
             var entity = entityObject as Entity;
             var entityRef = entityObject as EntityReference;
 
+            if (entity == null && entityRef == null)
+            {
+                return;
+            }
             var guid = (entity != null) ? entity.Id : entityRef.Id;
             var logicalName = (entity != null) ? entity.LogicalName : entityRef.LogicalName;
 

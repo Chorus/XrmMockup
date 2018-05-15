@@ -210,9 +210,12 @@ namespace DG.Tools.XrmMockup {
                 // Check if it is supposed to execute. Returns preemptively, if it should not.
                 var entity = entityObject as Entity;
                 var entityRef = entityObject as EntityReference;
+                var request = entityObject as OrganizationRequest;
 
-                var guid = (entity != null) ? entity.Id : entityRef.Id;
-                var logicalName = (entity != null) ? entity.LogicalName : entityRef.LogicalName;
+                var guid = entity?.Id ?? entityRef?.Id ?? Guid.Empty;
+
+                var logicalName =  entity?.LogicalName ?? entityRef?.LogicalName ?? request?.RequestName;
+
                 if (entityName != "" && entityName != logicalName) return;
 
                 if (entity != null && metadata.GetMetadata(logicalName)?.PrimaryIdAttribute != null) {

@@ -46,7 +46,7 @@ namespace DG.Tools.XrmMockup {
             { typeof(UpdateRequest), EventOperation.Update },
             { typeof(WinOpportunityRequest), EventOperation.Win },
             { typeof(LoseOpportunityRequest), EventOperation.Lose },
-
+            { typeof(OrganizationRequest), EventOperation.Execute },
         };
 
         public static readonly Dictionary<string, ConditionOperator> ConditionalOperator = new Dictionary<string, ConditionOperator>

@@ -366,6 +366,10 @@ namespace DG.Tools.XrmMockup {
             pluginContext.BusinessUnitId = buRef.Id;
 
             Mappings.RequestToEventOperation.TryGetValue(request.GetType(), out EventOperation? eventOp);
+            if (eventOp == null && request.GetType().BaseType != null)
+            {
+                Mappings.RequestToEventOperation.TryGetValue(request.GetType().BaseType, out eventOp);
+            }
 
             var entityInfo = GetEntityInfo(request);
 
@@ -565,7 +569,7 @@ namespace DG.Tools.XrmMockup {
                     : (request as LoseOpportunityRequest).OpportunityClose;
                 obj = close.GetAttributeValue<EntityReference>("opportunityid");
             }
-
+            
             if (obj != null) {
                 var entity = obj as Entity;
                 var entityRef = obj as EntityReference;
@@ -576,7 +580,10 @@ namespace DG.Tools.XrmMockup {
                     return new Tuple<object, string, Guid>(obj, entityRef.LogicalName, entityRef.Id);
                 }
             }
-            return null;
+            else
+            {
+                return new Tuple<object, string, Guid>(request, request.RequestName, request.RequestId ?? Guid.Empty);
+            }
         }
 
         private Entity TryRetrieve(EntityReference reference) {
