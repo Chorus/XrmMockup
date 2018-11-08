@@ -59,11 +59,9 @@ namespace DG.Tools.XrmMockup.Database
 			return attrMetadata;
 		}
 
-
-		public DbRow(DbTable table, Guid id, IEnumerable<KeyValuePair<string, object>> columns)
-		{
-			this.Table = table;
-			this.Id = id;
+        public DbRow(DbTable table, Guid id, IEnumerable<KeyValuePair<string, object>> columns) {
+            this.Table = table;
+            this.Id = id;
 
 			if (columns != null)
 			{
@@ -233,5 +231,14 @@ namespace DG.Tools.XrmMockup.Database
 			return new EntityReference(Table.TableName, Id);
 		}
 
-	}
+        public DbRow Clone(DbTable table)
+        {
+            var clonedColumns = this.Columns.ToDictionary(x => x.Key, x => x.Value);
+            var clonedDBRow = new DbRow(table, this.Id, clonedColumns)
+            {
+                IsDeleted = this.IsDeleted
+            };
+            return clonedDBRow;
+        }
+    }
 }
