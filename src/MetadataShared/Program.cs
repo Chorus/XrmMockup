@@ -40,10 +40,8 @@ namespace DG.Tools.XrmMockup.Metadata {
         static void GenerateMetadata() {
             var auth = new AuthHelper(
                 ParsedArgs[Arguments.Url],
-                ParsedArgs[Arguments.Username],
-                ParsedArgs[Arguments.Password],
-                ParsedArgs[Arguments.AuthProvider],
-                ParsedArgs[Arguments.Domain]
+                ParsedArgs[Arguments.RedirectUrl],
+                ParsedArgs[Arguments.ClientId]
             );
             Console.WriteLine("Generation of metadata files started");
             var generator = new DataHelper(auth.Authenticate(), ParsedArgs[Arguments.Entities], ParsedArgs[Arguments.Solutions], ParsedArgs.GetAsType<bool>(Arguments.fetchFromAssemblies));

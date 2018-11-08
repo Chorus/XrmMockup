@@ -72,7 +72,11 @@ namespace DG.Tools.XrmMockup {
                         .ToArray();
                 }
                 else {
-                    values = new[] { condition.Attribute("value").Value };
+                    var value = condition.Attribute("value")?.Value;
+                    if (value != null)
+                    {
+                        values = new[] { value };
+                    }
                 }
 #if XRM_MOCKUP_2011
                 filterExp.AddCondition(attr, op, values);

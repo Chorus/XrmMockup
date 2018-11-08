@@ -21,31 +21,21 @@ namespace DG.Tools.XrmMockup.Metadata
             Abbreviations = new string[] { }
         };
 
-        public static ArgumentDescription Username = new ArgumentDescription() {
-            Name = "username",
-            Abbreviations = new string[] { "usr", "u" }
+        public static ArgumentDescription ClientId = new ArgumentDescription()
+        {
+            Name = "clientid",
+            Abbreviations = new string[] { }
         };
 
-        public static ArgumentDescription Password = new ArgumentDescription() {
-            Name = "password",
-            Abbreviations = new string[] { "pwd", "p" }
-        };
-
-        public static ArgumentDescription Domain = new ArgumentDescription() {
-            Name = "domain",
-            Abbreviations = new string[] { "dmn", "d" }
-        };
-
-        public static ArgumentDescription AuthProvider = new ArgumentDescription() {
-            Name = "ap",
-            Abbreviations = new string[] { "authenticationprovider", "provider" }
+        public static ArgumentDescription RedirectUrl = new ArgumentDescription() {
+            Name = "redirecturl",
+            Abbreviations = new string[] { "rurl" }
         };
 
         public static ArgumentDescription OutDir = new ArgumentDescription() {
             Name = "outDir",
             Abbreviations = new string[] { "out", "o" }
         };
-
 
         public static ArgumentDescription Entities = new ArgumentDescription() {
             Name = "entities",
@@ -70,10 +60,8 @@ namespace DG.Tools.XrmMockup.Metadata
         
         public static ArgumentDescription[] ArgList = new ArgumentDescription[] {
             Url,
-            Username,
-            Password,
-            Domain,
-            AuthProvider,
+            RedirectUrl,
+            ClientId,
             Entities,
             Solutions,
             OutDir,
