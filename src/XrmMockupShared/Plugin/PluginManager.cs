@@ -55,7 +55,7 @@ namespace DG.Tools.XrmMockup {
         public int ExecutionOrder;
         public string FilteredAttributes;
         public string UserContext;
-        private readonly int IsolationMode;
+        public readonly int IsolationMode;
 
         public StepDeployment(int pluginDeployment, int pluginExecutionMode, string name, int executionOrder, string filteredAttributes, string userContext, int isolationMode) : this()
         {
@@ -124,23 +124,25 @@ namespace DG.Tools.XrmMockup {
 
         private void RegisterPlugin(Type basePluginType, Dictionary<string, EntityMetadata> metadata, List<MetaPlugin> plugins, Dictionary<EventOperation, Dictionary<ExecutionStage, List<PluginTrigger>>> register)
         {
-            var plugin = Activator.CreateInstance(basePluginType);
+            var sandbox = new LowTrustSandBox(
+                //typeof(XrmMockup365).Assembly,
+                basePluginType.Assembly,
+                typeof(Entity).Assembly
+            );
+            MethodInfo pluginMethod = null;
 
             Action<MockupServiceProviderAndFactory> pluginExecute = null;
             var stepConfigs = new List<StepConfig>();
 
             if (basePluginType.GetMethod("PluginProcessingStepConfigs") != null)
             { // Matches DAXIF plugin registration
-                var configs = basePluginType
+                var configs = sandbox.Run(basePluginType
                     .GetMethod("PluginProcessingStepConfigs")
-                    .Invoke(plugin, new object[] { });
+                );
                 var stepConfig = JsonConvert.DeserializeObject<IEnumerable<StepConfig>>(JsonConvert.SerializeObject(configs));
                 stepConfigs.AddRange(stepConfig);
-                pluginExecute = (provider) => {
-                    basePluginType
-                    .GetMethod("Execute")
-                    .Invoke(plugin, new object[] { provider });
-                };
+                pluginMethod = basePluginType
+                    .GetMethod("Execute");
             }
             else
             { // Retrieve registration from CRM metadata
@@ -153,11 +155,8 @@ namespace DG.Tools.XrmMockup {
                 var extendedConfig = new StepDeployment(0, metaPlugin.Mode, metaPlugin.Name, metaPlugin.Rank, metaPlugin.FilteredAttributes, Guid.Empty.ToString(), metaPlugin.AssemblyIsolationMode);
                 var imageTuple = new List<StepImage>();
                 stepConfigs.Add(new StepConfig(stepConfig, extendedConfig, imageTuple));
-                pluginExecute = (provider) => {
-                    basePluginType
-                    .GetMethod("Execute")
-                    .Invoke(plugin, new object[] { provider });
-                };
+                pluginMethod = basePluginType
+                    .GetMethod("Execute");
             }
 
             // Add discovered plugin triggers
@@ -166,7 +165,16 @@ namespace DG.Tools.XrmMockup {
                 var operation = (EventOperation)Enum.Parse(typeof(EventOperation), stepConfig.StepSubscription.EventOperation);
                 var stage = (ExecutionStage)stepConfig.StepSubscription.ExecutionStage;
 
-                //stepConfig.StepDeployment.Deployment
+                if(false)//stepConfig.StepDeployment.IsolationMode == 2)
+                {
+                    pluginExecute = provider => sandbox.Run(pluginMethod, provider);
+                }
+                else
+                {
+                    pluginExecute = provider => pluginMethod.Invoke(
+                        Activator.CreateInstance(basePluginType), 
+                        new[] { provider });
+                }
 
                 var trigger = new PluginTrigger(operation, stage, pluginExecute, stepConfig, metadata);
 

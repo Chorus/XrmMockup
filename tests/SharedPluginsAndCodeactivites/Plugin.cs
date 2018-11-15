@@ -9,6 +9,7 @@
     using Microsoft.Xrm.Sdk;
     using System.Reflection;
 
+    [Serializable]
     public struct StepConfig
     {
         public StepSubscription StepSubscription;
@@ -23,6 +24,7 @@
         }
     }
 
+    [Serializable]
     public struct StepSubscription
     {
         public string ClassName;
@@ -38,6 +40,7 @@
             LogicalName = logicalName;
         }
     }
+    [Serializable]
     public struct StepDeployment
     {
         public int Deployment;
@@ -59,6 +62,7 @@
             this.IsolationMode = isolationMode;
         }
     }
+    [Serializable]
     public struct StepImage
     {
         public string Name;
@@ -313,15 +317,15 @@
         /// Get the plugin step configurations.
         /// </summary>
         /// <returns>List of steps</returns>
-        public IEnumerable<StepConfig> PluginProcessingStepConfigs() {
+        public StepConfig[] PluginProcessingStepConfigs() {
             var className = this.ChildClassName;
-            foreach (var config in this.PluginStepConfigs) {
-                yield return
+            return this.PluginStepConfigs
+                .Select(config => 
                     new StepConfig(
                         new StepSubscription(className, config._ExecutionStage, config._EventOperation, config._LogicalName),
                         new StepDeployment(config._Deployment, config._ExecutionMode, config._Name, config._ExecutionOrder, config._FilteredAttributes, config._UserContext.ToString(), 2),
-                        config.GetImages());
-            }
+                        config.GetImages())
+                ).ToArray();
         }
 
 
@@ -367,7 +371,7 @@
         int _ExecutionOrder { get; }
         string _FilteredAttributes { get; }
         Guid _UserContext { get; }
-        IEnumerable<StepImage> GetImages();
+        StepImage[] GetImages();
     }
 
     /// <summary>
@@ -459,10 +463,10 @@
             return this;
         }
 
-        public IEnumerable<StepImage> GetImages() {
-            foreach (var image in this._Images) {
-                yield return new StepImage(image.Name, image.EntityAlias, image.ImageType, image.Attributes);
-            }
+        public StepImage[] GetImages() {
+            return _Images.Select(image =>
+                new StepImage(image.Name, image.EntityAlias, image.ImageType, image.Attributes)
+            ).ToArray();
         }
 
         /// <summary>

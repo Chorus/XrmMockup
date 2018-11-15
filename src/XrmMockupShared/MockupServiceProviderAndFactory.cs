@@ -12,7 +12,8 @@ namespace DG.Tools.XrmMockup {
     /// <summary>
     /// A factory used to generate MockupServices based on a given Mockup instance and pluginContext
     /// </summary>
-    internal class MockupServiceProviderAndFactory : IServiceProvider, IOrganizationServiceFactory {
+    
+    internal class MockupServiceProviderAndFactory : MarshalByRefObject, IServiceProvider, IOrganizationServiceFactory {
 
         private Core core;
         private ITracingService tracingService;

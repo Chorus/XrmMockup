@@ -15,6 +15,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Database\XrmDb.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Database\DeviceIdManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MockupNotificationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Plugin\LowTrustSandBox.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\Plugin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\SystemPlugins\ContactTest.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Requests\AddMembersTeamRequestHandler.cs" />

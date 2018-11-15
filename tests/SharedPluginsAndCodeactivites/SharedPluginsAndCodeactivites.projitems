@@ -5,9 +5,7 @@
     <HasSharedItems>true</HasSharedItems>
     <SharedGUID>90c1c72b-c544-485a-b718-acfaee516106</SharedGUID>
   </PropertyGroup>
-  <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>SharedPluginsAndCodeactivites</Import_RootNamespace>
-  </PropertyGroup>
+  <PropertyGroup Label="Configuration" />
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AccountCurrencyBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AccountChainPostPlugin.cs" />
