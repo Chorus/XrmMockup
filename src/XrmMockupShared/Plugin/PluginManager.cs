@@ -11,15 +11,76 @@ using System.ServiceModel;
 using Microsoft.Xrm.Sdk.Metadata;
 using System.Runtime.ExceptionServices;
 using XrmMockupShared;
+using System.Collections;
 
 namespace DG.Tools.XrmMockup {
 
-    // StepConfig           : className, ExecutionStage, EventOperation, LogicalName
-    // ExtendedStepConfig   : Deployment, ExecutionMode, Name, ExecutionOrder, FilteredAttributes
-    // ImageTuple           : Name, EntityAlias, ImageType, Attributes
-    using StepConfig = Tuple<string, int, string, string>;
-    using ExtendedStepConfig = Tuple<int, int, string, int, string, string>;
-    using ImageTuple = Tuple<string, string, int, string>;
+    // StepSubscription           : ClassName, ExecutionStage, EventOperation, LogicalName
+    // StepDeployment   : Deployment, ExecutionMode, Name, ExecutionOrder, FilteredAttributes, UserContext
+    // StepImage           : Name, EntityAlias, ImageType, Attributes
+
+    public struct StepConfig
+    {
+        public StepSubscription StepSubscription;
+        public StepDeployment StepDeployment;
+        public IEnumerable<StepImage> StepImages;
+
+        public StepConfig(StepSubscription stepSubscription, StepDeployment stepDeployment, IEnumerable<StepImage> stepImages) :this()
+        {
+            StepSubscription = stepSubscription;
+            StepDeployment = stepDeployment;
+            StepImages = stepImages;
+        }
+    }
+
+    public struct StepSubscription {
+        public string ClassName;
+        public int ExecutionStage;
+        public string EventOperation;
+        public string LogicalName;
+
+        public StepSubscription(string className, int pluginExecutionStage, string pluginEventOperation, string logicalName) : this()
+        {
+            ClassName = className;
+            ExecutionStage = pluginExecutionStage;
+            EventOperation = pluginEventOperation;
+            LogicalName = logicalName;
+        }
+    }
+    public struct StepDeployment {
+        public int Deployment;
+        public int ExecutionMode;
+        public string Name;
+        public int ExecutionOrder;
+        public string FilteredAttributes;
+        public string UserContext;
+        private readonly int IsolationMode;
+
+        public StepDeployment(int pluginDeployment, int pluginExecutionMode, string name, int executionOrder, string filteredAttributes, string userContext, int isolationMode) : this()
+        {
+            Deployment = pluginDeployment;
+            ExecutionMode = pluginExecutionMode;
+            Name = name;
+            ExecutionOrder = executionOrder;
+            FilteredAttributes = filteredAttributes;
+            UserContext = userContext;
+            this.IsolationMode = isolationMode;
+        }
+    }
+    public struct StepImage {
+        public string Name;
+        public string EntityAlias;
+        public int ImageType;
+        public string Attributes;
+
+        public StepImage(string name, string entityAlias, int pluginImageType, string attributes) : this()
+        {
+            Name = name;
+            EntityAlias = entityAlias;
+            ImageType = pluginImageType;
+            Attributes = attributes;
+        }
+    }
 
     internal class PluginManager {
 
@@ -65,15 +126,15 @@ namespace DG.Tools.XrmMockup {
             var plugin = Activator.CreateInstance(basePluginType);
 
             Action<MockupServiceProviderAndFactory> pluginExecute = null;
-            var stepConfigs = new List<Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>>();
+            var stepConfigs = new List<StepConfig>();
 
             if (basePluginType.GetMethod("PluginProcessingStepConfigs") != null)
             { // Matches DAXIF plugin registration
-                stepConfigs.AddRange(
-                    basePluginType
+                var configs = basePluginType
                     .GetMethod("PluginProcessingStepConfigs")
-                    .Invoke(plugin, new object[] { })
-                    as IEnumerable<Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>>);
+                    .Invoke(plugin, new object[] { });
+                var t = ((IEnumerable)configs).Cast<StepConfig>();
+                stepConfigs.AddRange(configs as IEnumerable<StepConfig>);
                 pluginExecute = (provider) => {
                     basePluginType
                     .GetMethod("Execute")
@@ -87,10 +148,10 @@ namespace DG.Tools.XrmMockup {
                 {
                     throw new MockupException($"Unknown plugin '{basePluginType.FullName}', please use DAXIF registration or make sure the plugin is uploaded to CRM.");
                 }
-                var stepConfig = new StepConfig(metaPlugin.AssemblyName, metaPlugin.Stage, metaPlugin.MessageName, metaPlugin.PrimaryEntity);
-                var extendedConfig = new ExtendedStepConfig(0, metaPlugin.Mode, metaPlugin.Name, metaPlugin.Rank, metaPlugin.FilteredAttributes, Guid.Empty.ToString());
-                var imageTuple = new List<ImageTuple>();
-                stepConfigs.Add(new Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>(stepConfig, extendedConfig, imageTuple));
+                var stepConfig = new StepSubscription(metaPlugin.AssemblyName, metaPlugin.Stage, metaPlugin.MessageName, metaPlugin.PrimaryEntity);
+                var extendedConfig = new StepDeployment(0, metaPlugin.Mode, metaPlugin.Name, metaPlugin.Rank, metaPlugin.FilteredAttributes, Guid.Empty.ToString(), metaPlugin.AssemblyIsolationMode);
+                var imageTuple = new List<StepImage>();
+                stepConfigs.Add(new StepConfig(stepConfig, extendedConfig, imageTuple));
                 pluginExecute = (provider) => {
                     basePluginType
                     .GetMethod("Execute")
@@ -101,8 +162,11 @@ namespace DG.Tools.XrmMockup {
             // Add discovered plugin triggers
             foreach (var stepConfig in stepConfigs)
             {
-                var operation = (EventOperation)Enum.Parse(typeof(EventOperation), stepConfig.Item1.Item3);
-                var stage = (ExecutionStage)stepConfig.Item1.Item2;
+                var operation = (EventOperation)Enum.Parse(typeof(EventOperation), stepConfig.StepSubscription.EventOperation);
+                var stage = (ExecutionStage)stepConfig.StepSubscription.ExecutionStage;
+
+                //stepConfig.StepDeployment.Deployment
+
                 var trigger = new PluginTrigger(operation, stage, pluginExecute, stepConfig, metadata);
 
                 AddTrigger(operation, stage, trigger, register);
@@ -137,7 +201,7 @@ namespace DG.Tools.XrmMockup {
         private void RegisterSystemPlugins(Dictionary<EventOperation, Dictionary<ExecutionStage, List<PluginTrigger>>> register)
         {
             Action<MockupServiceProviderAndFactory> pluginExecute = null;
-            var stepConfigs = new List<Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>>();
+            var stepConfigs = new List<StepConfig>();
 
             foreach (var plugin in systemPlugins)
             {
@@ -147,8 +211,8 @@ namespace DG.Tools.XrmMockup {
                 // Add discovered plugin triggers
                 foreach (var stepConfig in stepConfigs)
                 {
-                    var operation = (EventOperation)Enum.Parse(typeof(EventOperation), stepConfig.Item1.Item3);
-                    var stage = (ExecutionStage)stepConfig.Item1.Item2;
+                    var operation = (EventOperation)Enum.Parse(typeof(EventOperation), stepConfig.StepSubscription.EventOperation);
+                    var stage = (ExecutionStage)stepConfig.StepSubscription.ExecutionStage;
                     var trigger = new PluginTrigger(operation, stage, pluginExecute, stepConfig, new Dictionary<string, EntityMetadata>());
 
                     AddTrigger(operation, stage, trigger, register);
@@ -221,21 +285,20 @@ namespace DG.Tools.XrmMockup {
             Dictionary<string, EntityMetadata> metadata;
 
             HashSet<string> attributes;
-            IEnumerable<ImageTuple> images;
+            IEnumerable<StepImage> images;
 
             public PluginTrigger(EventOperation operation, ExecutionStage stage,
-                    Action<MockupServiceProviderAndFactory> pluginExecute, Tuple<StepConfig, ExtendedStepConfig,
-                        IEnumerable<ImageTuple>> stepConfig, Dictionary<string, EntityMetadata> metadata) {
+                    Action<MockupServiceProviderAndFactory> pluginExecute, StepConfig stepConfig, Dictionary<string, EntityMetadata> metadata) {
                 this.pluginExecute = pluginExecute;
-                this.entityName = stepConfig.Item1.Item4;
+                this.entityName = stepConfig.StepSubscription.LogicalName;
                 this.operation = operation;
                 this.stage = stage;
-                this.mode = (ExecutionMode)stepConfig.Item2.Item2;
-                this.order = stepConfig.Item2.Item4;
-                this.images = stepConfig.Item3;
+                this.mode = (ExecutionMode)stepConfig.StepDeployment.ExecutionMode;
+                this.order = stepConfig.StepDeployment.ExecutionOrder;
+                this.images = stepConfig.StepImages;
                 this.metadata = metadata;
 
-                var attrs = stepConfig.Item2.Item5 ?? "";
+                var attrs = stepConfig.StepDeployment.FilteredAttributes ?? "";
                 this.attributes = String.IsNullOrWhiteSpace(attrs) ? new HashSet<string>() : new HashSet<string>(attrs.Split(','));
             }
 
@@ -293,13 +356,13 @@ namespace DG.Tools.XrmMockup {
                 thisPluginContext.PrimaryEntityName = logicalName;
 
                 foreach (var image in this.images) {
-                    var type = (ImageType)image.Item3;
-                    var cols = image.Item4 != null ? new ColumnSet(image.Item4.Split(',')) : new ColumnSet(true);
+                    var type = (ImageType)image.ImageType;
+                    var cols = image.Attributes != null ? new ColumnSet(image.Attributes.Split(',')) : new ColumnSet(true);
                     if (postImage != null && stage == ExecutionStage.PostOperation && (type == ImageType.PostImage || type == ImageType.Both)) {
-                        thisPluginContext.PostEntityImages.Add(image.Item1, postImage.CloneEntity(metadata.GetMetadata(postImage.LogicalName), cols));
+                        thisPluginContext.PostEntityImages.Add(image.Name, postImage.CloneEntity(metadata.GetMetadata(postImage.LogicalName), cols));
                     }
                     if (preImage != null && type == ImageType.PreImage || type == ImageType.Both) {
-                        thisPluginContext.PreEntityImages.Add(image.Item1, preImage.CloneEntity(metadata.GetMetadata(preImage.LogicalName), cols));
+                        thisPluginContext.PreEntityImages.Add(image.Name, preImage.CloneEntity(metadata.GetMetadata(preImage.LogicalName), cols));
                     }
                 }
 

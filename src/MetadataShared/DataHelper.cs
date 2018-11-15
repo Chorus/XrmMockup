@@ -1,4 +1,7 @@
-﻿using DG.Tools;
+﻿using Chorus.LinqToFetch;
+using Chorus.LinqToFetch.Fetch;
+using Chorus.LinqToXrm;
+using DG.Tools;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -114,49 +117,29 @@ namespace DG.Tools.XrmMockup.Metadata
             if (solutions == null || solutions.Length == 0) {
                 return new List<MetaPlugin>();
             }
+            var ctx = new XrmQueryProvider(service);
+            var q = from smps in ctx.CreateQuery("sdkmessageprocessingstep")
+                    join sdkmessagefilter in ctx.CreateQuery("sdkmessagefilter") on smps["sdkmessagefilterid"] equals sdkmessagefilter["sdkmessagefilterid"]
+                    join sc in ctx.CreateQuery("solutioncomponent") on smps["sdkmessageprocessingstepid"] equals sc["objectid"]
+                    join s in ctx.CreateQuery("solution") on sc["solutionid"] equals s["solutionid"]
+                    join pt in ctx.CreateQuery("plugintype") on smps["eventhandler"] equals pt["plugintypeid"]
+                    join assembly in ctx.CreateQuery("pluginassembly") on pt["pluginassemblyid"] equals assembly["pluginAssemblyid"]
+                    where smps["statecode"].Equals(0)
+                    where s["uniquename"].Is(FetchConditionOperator.In, solutions.Cast<object>().ToArray())
+                    select new MetaPlugin
+                    {
+                        Stage = (smps["stage"] as OptionSetValue).Value,
+                        Mode = (smps["mode"] as OptionSetValue).Value,
+                        Rank = (int)smps["rank"],
+                        MessageName = ((EntityReference)smps["sdkmessageid"]).Name,
+                        FilteredAttributes = smps["filteringattributes"] as string,
+                        Name = smps["name"] as string,
+                        AssemblyName = assembly["name"] as string,
+                        PrimaryEntity = sdkmessagefilter["primaryobjecttypecode"] as string,
+                        AssemblyIsolationMode = (assembly["isolationmode"] as OptionSetValue).Value
+                    };
 
-            var pluginQuery = new QueryExpression("sdkmessageprocessingstep") {
-                ColumnSet = new ColumnSet("eventhandler", "stage", "mode", "rank", "sdkmessageid", "filteringattributes", "name"),
-                Criteria = new FilterExpression()
-            };
-            pluginQuery.Criteria.AddCondition("statecode", ConditionOperator.Equal, 0);
-
-            var sdkMessageFilterQuery = new LinkEntity("sdkmessageprocessingstep", "sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.Inner) {
-                Columns = new ColumnSet("primaryobjecttypecode"),
-                EntityAlias = "sdkmessagefilter",
-                LinkCriteria = new FilterExpression()
-            };
-            pluginQuery.LinkEntities.Add(sdkMessageFilterQuery);
-
-            var solutionComponentQuery = new LinkEntity("sdkmessageprocessingstep", "solutioncomponent", "sdkmessageprocessingstepid", "objectid", JoinOperator.Inner) {
-                Columns = new ColumnSet(),
-                LinkCriteria = new FilterExpression()
-            };
-            pluginQuery.LinkEntities.Add(solutionComponentQuery);
-
-            var solutionQuery = new LinkEntity("solutioncomponent", "solution", "solutionid", "solutionid", JoinOperator.Inner) {
-                Columns = new ColumnSet(),
-                LinkCriteria = new FilterExpression()
-            };
-            solutionQuery.LinkCriteria.AddCondition("uniquename", ConditionOperator.In, solutions);
-            solutionComponentQuery.LinkEntities.Add(solutionQuery);
-
-            var plugins = new List<MetaPlugin>();
-
-            foreach (var plugin in service.RetrieveMultiple(pluginQuery).Entities) {
-                var metaPlugin = new MetaPlugin() {
-                    Name = plugin.GetAttributeValue<string>("name"),
-                    Rank = plugin.GetAttributeValue<int>("rank"),
-                    FilteredAttributes = plugin.GetAttributeValue<string>("filteringattributes"),
-                    Mode = plugin.GetAttributeValue<OptionSetValue>("mode").Value,
-                    Stage = plugin.GetAttributeValue<OptionSetValue>("stage").Value,
-                    MessageName = plugin.GetAttributeValue<EntityReference>("sdkmessageid").Name,
-                    AssemblyName = plugin.GetAttributeValue<EntityReference>("eventhandler").Name,
-                    PrimaryEntity = plugin.GetAttributeValue<AliasedValue>("sdkmessagefilter.primaryobjecttypecode").Value as string
-                };
-                plugins.Add(metaPlugin);
-            }
-
+            var plugins = q.ToList();
             return plugins;
         }
 

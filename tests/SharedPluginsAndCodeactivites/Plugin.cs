@@ -7,14 +7,73 @@
     using System.ServiceModel;
     using System.Linq.Expressions;
     using Microsoft.Xrm.Sdk;
-
-    // StepConfig           : className, ExecutionStage, EventOperation, LogicalName
-    // ExtendedStepConfig   : Deployment, ExecutionMode, Name, ExecutionOrder, FilteredAttributes, UserContext
-    // ImageTuple           : Name, EntityAlias, ImageType, Attributes
-    using StepConfig = System.Tuple<string, int, string, string>;
-    using ExtendedStepConfig = System.Tuple<int, int, string, int, string, string>;
-    using ImageTuple = System.Tuple<string, string, int, string>;
     using System.Reflection;
+
+    public struct StepConfig
+    {
+        public StepSubscription StepSubscription;
+        public StepDeployment StepDeployment;
+        public IEnumerable<StepImage> StepImages;
+
+        public StepConfig(StepSubscription stepSubscription, StepDeployment stepDeployment, IEnumerable<StepImage> stepImages) : this()
+        {
+            StepSubscription = stepSubscription;
+            StepDeployment = stepDeployment;
+            StepImages = stepImages;
+        }
+    }
+
+    public struct StepSubscription
+    {
+        public string ClassName;
+        public int ExecutionStage;
+        public string EventOperation;
+        public string LogicalName;
+
+        public StepSubscription(string className, int pluginExecutionStage, string pluginEventOperation, string logicalName) : this()
+        {
+            ClassName = className;
+            ExecutionStage = pluginExecutionStage;
+            EventOperation = pluginEventOperation;
+            LogicalName = logicalName;
+        }
+    }
+    public struct StepDeployment
+    {
+        public int Deployment;
+        public int ExecutionMode;
+        public string Name;
+        public int ExecutionOrder;
+        public string FilteredAttributes;
+        public string UserContext;
+        private readonly int IsolationMode;
+
+        public StepDeployment(int pluginDeployment, int pluginExecutionMode, string name, int executionOrder, string filteredAttributes, string userContext, int isolationMode) : this()
+        {
+            Deployment = pluginDeployment;
+            ExecutionMode = pluginExecutionMode;
+            Name = name;
+            ExecutionOrder = executionOrder;
+            FilteredAttributes = filteredAttributes;
+            UserContext = userContext;
+            this.IsolationMode = isolationMode;
+        }
+    }
+    public struct StepImage
+    {
+        public string Name;
+        public string EntityAlias;
+        public int ImageType;
+        public string Attributes;
+
+        public StepImage(string name, string entityAlias, int pluginImageType, string attributes) : this()
+        {
+            Name = name;
+            EntityAlias = entityAlias;
+            ImageType = pluginImageType;
+            Attributes = attributes;
+        }
+    }
 
     /// <summary>
     /// Base class for all Plugins.
@@ -254,13 +313,13 @@
         /// Get the plugin step configurations.
         /// </summary>
         /// <returns>List of steps</returns>
-        public IEnumerable<Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>> PluginProcessingStepConfigs() {
+        public IEnumerable<StepConfig> PluginProcessingStepConfigs() {
             var className = this.ChildClassName;
             foreach (var config in this.PluginStepConfigs) {
                 yield return
-                    new Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>(
-                        new StepConfig(className, config._ExecutionStage, config._EventOperation, config._LogicalName),
-                        new ExtendedStepConfig(config._Deployment, config._ExecutionMode, config._Name, config._ExecutionOrder, config._FilteredAttributes, config._UserContext.ToString()),
+                    new StepConfig(
+                        new StepSubscription(className, config._ExecutionStage, config._EventOperation, config._LogicalName),
+                        new StepDeployment(config._Deployment, config._ExecutionMode, config._Name, config._ExecutionOrder, config._FilteredAttributes, config._UserContext.ToString(), 2),
                         config.GetImages());
             }
         }
@@ -308,7 +367,7 @@
         int _ExecutionOrder { get; }
         string _FilteredAttributes { get; }
         Guid _UserContext { get; }
-        IEnumerable<ImageTuple> GetImages();
+        IEnumerable<StepImage> GetImages();
     }
 
     /// <summary>
@@ -400,9 +459,9 @@
             return this;
         }
 
-        public IEnumerable<ImageTuple> GetImages() {
+        public IEnumerable<StepImage> GetImages() {
             foreach (var image in this._Images) {
-                yield return new ImageTuple(image.Name, image.EntityAlias, image.ImageType, image.Attributes);
+                yield return new StepImage(image.Name, image.EntityAlias, image.ImageType, image.Attributes);
             }
         }
 

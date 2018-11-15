@@ -25,6 +25,7 @@ namespace DG.Tools.XrmMockup {
         public string MessageName;
         public string AssemblyName;
         public string PrimaryEntity;
+        public int AssemblyIsolationMode;
     }
 
 

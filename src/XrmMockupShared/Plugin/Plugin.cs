@@ -9,13 +9,7 @@ using System.Linq.Expressions;
 using Microsoft.Xrm.Sdk;
 
 namespace DG.Tools.XrmMockup {
-
-    // StepConfig           : className, PluginExecutionStage, PluginEventOperation, LogicalName
-    // ExtendedStepConfig   : PluginDeployment, PluginExecutionMode, Name, ExecutionOrder, FilteredAttributes, UserContext
-    // ImageTuple           : Name, EntityAlias, PluginImageType, Attributes
-    using StepConfig = System.Tuple<string, int, string, string>;
-    using ExtendedStepConfig = System.Tuple<int, int, string, int, string, string>;
-    using ImageTuple = System.Tuple<string, string, int, string>;
+    
     using System.Reflection;
 
     /// <summary>
@@ -256,13 +250,13 @@ namespace DG.Tools.XrmMockup {
         /// Get the plugin step configurations.
         /// </summary>
         /// <returns>List of steps</returns>
-        public IEnumerable<Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>> PluginProcessingStepConfigs() {
+        internal IEnumerable<StepConfig> PluginProcessingStepConfigs() {
             var className = this.ChildClassName;
             foreach (var config in this.PluginStepConfigs) {
                 yield return
-                    new Tuple<StepConfig, ExtendedStepConfig, IEnumerable<ImageTuple>>(
-                        new StepConfig(className, config._PluginExecutionStage, config._PluginEventOperation, config._LogicalName),
-                        new ExtendedStepConfig(config._PluginDeployment, config._PluginExecutionMode, config._Name, config._ExecutionOrder, config._FilteredAttributes, config._UserContext.ToString()),
+                    new StepConfig(
+                        new StepSubscription(className, config._PluginExecutionStage, config._PluginEventOperation, config._LogicalName),
+                        new StepDeployment(config._PluginDeployment, config._PluginExecutionMode, config._Name, config._ExecutionOrder, config._FilteredAttributes, config._UserContext.ToString(), config.AssemblyIsolationMode),
                         config.GetImages());
             }
         }
@@ -270,7 +264,7 @@ namespace DG.Tools.XrmMockup {
 
         protected PluginStepConfig<Entity> RegisterPluginStep(
             string logicalName, PluginEventOperation PluginEventOperation, PluginExecutionStage PluginExecutionStage, Action<LocalPluginContext> action){
-            PluginStepConfig<Entity> stepConfig = new PluginStepConfig<Entity>(logicalName, PluginEventOperation, PluginExecutionStage);
+            var stepConfig = new PluginStepConfig<Entity>(logicalName, PluginEventOperation, PluginExecutionStage, 2);
             this.PluginStepConfigs.Add((IPluginStepConfig)stepConfig);
 
             this.RegisteredEvents.Add(
@@ -309,7 +303,8 @@ namespace DG.Tools.XrmMockup {
         int _ExecutionOrder { get; }
         string _FilteredAttributes { get; }
         Guid _UserContext { get; }
-        IEnumerable<ImageTuple> GetImages();
+        int AssemblyIsolationMode { get; }
+        IEnumerable<StepImage> GetImages();
     }
 
     /// <summary>
@@ -327,6 +322,7 @@ namespace DG.Tools.XrmMockup {
         public int _PluginExecutionMode { get; private set; }
         public int _ExecutionOrder { get; private set; }
         public Guid _UserContext { get; private set; }
+        public int AssemblyIsolationMode { get; private set; }
 
         public Collection<PluginStepImage> _Images = new Collection<PluginStepImage>();
         public Collection<string> _FilteredAttributesCollection = new Collection<string>();
@@ -338,9 +334,9 @@ namespace DG.Tools.XrmMockup {
             }
         }
 
-
-        public PluginStepConfig(string logicalName, PluginEventOperation PluginEventOperation, PluginExecutionStage PluginExecutionStage) {
+        public PluginStepConfig(string logicalName, PluginEventOperation PluginEventOperation, PluginExecutionStage PluginExecutionStage, int assemblyIsolationMode) {
             this._LogicalName = logicalName;
+            AssemblyIsolationMode = assemblyIsolationMode;
             this._PluginEventOperation = PluginEventOperation.ToString();
             this._PluginExecutionStage = (int)PluginExecutionStage;
             this._PluginDeployment = (int)PluginDeployment.ServerOnly;
@@ -401,9 +397,9 @@ namespace DG.Tools.XrmMockup {
             return this;
         }
 
-        public IEnumerable<ImageTuple> GetImages() {
+        public IEnumerable<StepImage> GetImages() {
             foreach (var image in this._Images) {
-                yield return new ImageTuple(image.Name, image.EntityAlias, image.PluginImageType, image.Attributes);
+                yield return new StepImage(image.Name, image.EntityAlias, image.PluginImageType, image.Attributes);
             }
         }
 
