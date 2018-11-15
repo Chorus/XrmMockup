@@ -12,6 +12,7 @@ using Microsoft.Xrm.Sdk.Metadata;
 using System.Runtime.ExceptionServices;
 using XrmMockupShared;
 using System.Collections;
+using Newtonsoft.Json;
 
 namespace DG.Tools.XrmMockup {
 
@@ -133,8 +134,8 @@ namespace DG.Tools.XrmMockup {
                 var configs = basePluginType
                     .GetMethod("PluginProcessingStepConfigs")
                     .Invoke(plugin, new object[] { });
-                var t = ((IEnumerable)configs).Cast<StepConfig>();
-                stepConfigs.AddRange(configs as IEnumerable<StepConfig>);
+                var stepConfig = JsonConvert.DeserializeObject<IEnumerable<StepConfig>>(JsonConvert.SerializeObject(configs));
+                stepConfigs.AddRange(stepConfig);
                 pluginExecute = (provider) => {
                     basePluginType
                     .GetMethod("Execute")
