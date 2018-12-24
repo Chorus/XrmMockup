@@ -1,4 +1,3 @@
 ﻿group crm365 
-	Microsoft.CrmSdk.CoreAssemblies
-	Microsoft.IdentityModel
+	Chorus.LinqToXrm.Client
 	Microsoft.CrmSdk.Workflow

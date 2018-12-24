@@ -6,7 +6,7 @@ tags microsoft crm xrm dynamics mockup fake c# csharp test testing unittest xrmm
 include-pdbs true
 include-referenced-projects true
 dependencies
-  Microsoft.CrmSdk.CoreAssemblies >= 8.2
+  Chorus.LinqToXrm.Client
 files
     ../MetadataGen/MetadataGenerator365/bin/Release/MetadataGenerator365.exe ==> content/net462/Metadata/
 	../MetadataGen/MetadataGenerator365/bin/Release/MetadataGenerator365.exe.config ==> content/net462/Metadata/
