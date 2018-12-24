@@ -6,7 +6,7 @@
 open Fake
 open Fake.Git
 open Fake.AssemblyInfoFile
-open Fake.ReleaseNotesHelper
+open Fake.Core
 open Fake.UserInputHelper
 open Fake.VSTest
 open System
@@ -71,7 +71,7 @@ let docsGitName = "delegateas.github.io"
 // --------------------------------------------------------------------------------------
 
 // Read additional information from the release notes document
-let release = LoadReleaseNotes "RELEASE_NOTES.md"
+let release = ReleaseNotes.load "RELEASE_NOTES.md"
 
 // Helper active pattern for project types
 let (|Fsproj|Csproj|Vbproj|Shproj|) (projFileName:string) =
@@ -171,7 +171,7 @@ Target "NuGet" (fun _ ->
     Paket.Pack(fun p ->
         { p with
             OutputPath = "bin"
-            Version = release.NugetVersion
+            Version = Environment.environVarOrDefault "Build_BuildNumber" release.NugetVersion
             
             ReleaseNotes = toLines release.Notes})
 )
