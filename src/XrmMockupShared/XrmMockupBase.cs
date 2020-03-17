@@ -7,8 +7,12 @@ using System.Text.RegularExpressions;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 using Microsoft.Crm.Sdk.Messages;
+using System.IO;
+using System.Runtime.CompilerServices;
 
-namespace DG.Tools.XrmMockup {
+namespace DG.Tools.XrmMockup
+{
+    using Privileges = Dictionary<string, Dictionary<AccessRights, PrivilegeDepth>>;
 
     /// <summary>
     /// A Mockup of a CRM instance
@@ -58,6 +62,7 @@ namespace DG.Tools.XrmMockup {
             if (settings.MetadataDirectoryPath != null)
                 metadataDirectory = settings.MetadataDirectoryPath;
             MetadataSkeleton metadata = Utility.GetMetadata(metadataDirectory);
+
             List<Entity> workflows = Utility.GetWorkflows(metadataDirectory);
             List<SecurityRole> securityRoles = Utility.GetSecurityRoles(metadataDirectory);
 
@@ -80,13 +85,37 @@ namespace DG.Tools.XrmMockup {
             };
 
             var regex = new Regex("^XrmMockup.*\\.dll$");
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(asm => asm.CustomAttributes.Any(attr => attr.AttributeType.Name.Equals("ProxyTypesAssemblyAttribute")))
-                .Where(asm => !exclude.Contains(asm.ManifestModule.Name) && !regex.IsMatch(asm.ManifestModule.Name));
+            var assemblies = new List<Assembly>();
+            var addedAssemblies = new HashSet<string>();
 
-            var assembly = assemblies.FirstOrDefault();
-            if (assembly != null) {
-                Core.EnableProxyTypes(assembly);
+            var exeAsm = AppDomain.CurrentDomain.GetAssemblies();
+            assemblies.AddRange(exeAsm);
+            foreach (var name in exeAsm.Select(x => x.FullName))
+            {
+                addedAssemblies.Add(name);
+            }
+
+            string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            foreach (string dll in Directory.GetFiles(path, "*.dll"))
+            {
+                var asm = Assembly.LoadFile(dll);
+                if (addedAssemblies.Contains(asm.FullName)) continue;
+
+                assemblies.Add(asm);
+                addedAssemblies.Add(asm.FullName);
+            }
+
+            var useableAssemblies =
+                assemblies
+                .Where(asm => asm.CustomAttributes.Any(attr => attr.AttributeType.Name.Equals("ProxyTypesAssemblyAttribute")))
+                .Where(asm => !exclude.Contains(asm.ManifestModule.Name) && !regex.IsMatch(asm.ManifestModule.Name))
+                .ToList();
+
+            if (useableAssemblies?.Any() == true) {
+                foreach (var asm in useableAssemblies)
+                {
+                    Core.EnableProxyTypes(asm);
+                }
                 HasProxyTypes = true;
             }
         }
@@ -265,7 +294,6 @@ namespace DG.Tools.XrmMockup {
         /// </summary>
         /// <param name="service"></param>
         /// <param name="businessUnit"></param>
-        /// <param name="type"></param>
         /// <param name="securityRoles"></param>
         /// <returns></returns>
         public Entity CreateTeam(IOrganizationService service, EntityReference businessUnit, params Guid[] securityRoles) {
@@ -371,6 +399,37 @@ namespace DG.Tools.XrmMockup {
         {
             Core.RegisterAdditionalPlugins(basePluginTypes, scope);
         }
-    }
 
+        /// <summary>
+        /// Returns the privilege of the given principle
+        /// </summary>
+        /// <param name="principleId">Guid of user or team</param>
+        /// <returns>A dictionary of entities where each entity contains a dictionary over access rights and privilege depth for the given principle</returns>
+        public Dictionary<string, Dictionary<AccessRights, PrivilegeDepth>> GetPrivilege(Guid principleId)
+        {
+            return Core.GetPrivilege(principleId);
+        }
+        
+        /// <summary>
+        /// Checks if a principle has the given access right to an entity
+        /// </summary>
+        /// <param name="entityRef">Entity to check against</param>
+        /// <param name="access">Access to check with</param>
+        /// <param name="principleRef">User or team</param>
+        /// <returns>If the given principle has permission to 'access' the entity</returns>
+        public bool HasPermission(EntityReference entityRef, AccessRights access, EntityReference principleRef)
+        {
+            return Core.HasPermission(entityRef, access, principleRef);
+        }
+
+        /// <summary>
+        /// Add entity privileges to the given principle ontop of any existing privileges and security roles
+        /// </summary>
+        /// <param name="principleRef">EntityReference of a user or team</param>
+        /// <param name="privileges">A dictionary of entities where each entity contains a dictionary over access rights and privilege depth</param>
+        internal void AddPrivileges(EntityReference principleRef, Dictionary<string, Dictionary<AccessRights, PrivilegeDepth>> privileges)
+        {
+            Core.AddPrivileges(principleRef, privileges);
+        }
+    }
 }

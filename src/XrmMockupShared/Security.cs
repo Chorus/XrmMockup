@@ -10,8 +10,12 @@ using System.ServiceModel;
 
 namespace DG.Tools.XrmMockup
 {
+    using AccessDepthRight = Dictionary<AccessRights, PrivilegeDepth>;
+    using Privileges = Dictionary<string, Dictionary<AccessRights, PrivilegeDepth>>;
+
     internal class Security
     {
+
         private static Guid SYSTEMADMIN_ROLE_TEMPLATE = new Guid("627090ff-40a3-4053-8790-584edc5be201");
         private Core Core;
         private MetadataSkeleton Metadata;
@@ -19,6 +23,7 @@ namespace DG.Tools.XrmMockup
         private Dictionary<Guid, SecurityRole> SecurityRoles;
         private Dictionary<Guid, Guid> SecurityRoleMapping;
         private Dictionary<EntityReference, Dictionary<EntityReference, AccessRights>> Shares;
+        private Dictionary<Guid, Privileges> PrinciplePrivilages = new Dictionary<Guid, Privileges>();
 
         internal Security(Core core, MetadataSkeleton metadata, List<SecurityRole> SecurityRoles)
         {
@@ -125,6 +130,25 @@ namespace DG.Tools.XrmMockup
                 Shares[target].Remove(revokee);
             }
         }
+        internal AccessRights GetAccessRights(EntityReference target, EntityReference userRef)
+        {
+            var entity = Core.GetDbRow(target);
+            return GetAccessRights(entity.ToEntity(), userRef);
+        }
+
+        internal AccessRights GetAccessRights(Entity target, EntityReference userRef)
+        {
+            var ret = AccessRights.None;
+            ret |= HasPermission(target, AccessRights.CreateAccess, userRef) ? AccessRights.CreateAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.ReadAccess, userRef) ? AccessRights.ReadAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.WriteAccess, userRef) ? AccessRights.WriteAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.DeleteAccess, userRef) ? AccessRights.DeleteAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.AppendAccess, userRef) ? AccessRights.AppendAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.AppendToAccess, userRef) ? AccessRights.AppendToAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.AssignAccess, userRef) ? AccessRights.AssignAccess : AccessRights.None;
+            ret |= HasPermission(target, AccessRights.ShareAccess, userRef) ? AccessRights.ShareAccess : AccessRights.None;
+            return ret;
+        }
 
 #if !(XRM_MOCKUP_2011 || XRM_MOCKUP_2013 || XRM_MOCKUP_2015)
         internal void CascadeOwnerUpdate(Entity dbEntity, EntityReference userRef, EntityReference ownerRef)
@@ -197,15 +221,132 @@ namespace DG.Tools.XrmMockup
             InitializeSecurityRoles(db);
         }
 
-        internal void SetSecurityRole(EntityReference entRef, Guid[] securityRoles)
+        internal Privileges GetPrincipalPrivilege(Guid principleId)
         {
-            if (securityRoles.Any(s => !SecurityRoles.ContainsKey(s)))
+            if (!PrinciplePrivilages.Keys.Contains(principleId))
+            {
+                return null;
+            }
+            return PrinciplePrivilages[principleId];
+        }
+
+        private AccessDepthRight JoinAccess(AccessDepthRight adr1, AccessDepthRight adr2)
+        {
+            var newAdr = adr1.ToDictionary(x => x.Key, x => x.Value);
+            var intersect = adr1.Keys.Intersect(adr2.Keys);
+            foreach(var access in intersect)
+            {
+                var d1 = adr1[access];
+                var d2 = adr2[access];
+                newAdr.Remove(access);
+                newAdr.Add(access, (PrivilegeDepth) Math.Max(((int) d1), ((int) d2)));
+            }
+
+            foreach (var access in adr2.Keys.Except(intersect))
+            {
+                newAdr.Add(access, adr2[access]);
+            }
+
+            return newAdr;
+        }
+
+        private Privileges JoinPrivileges(Privileges privilege1, Dictionary<string, Dictionary<AccessRights, RolePrivilege>> privileges2)
+        {
+            Privileges privilage2Modified = privileges2.Select(x =>
+                new KeyValuePair<string, AccessDepthRight>(
+                    x.Key,
+                    x.Value.Select(y =>
+                        new KeyValuePair<AccessRights, PrivilegeDepth>(y.Key, y.Value.PrivilegeDepth))
+                        .ToDictionary(v => v.Key, v => v.Value)))
+                .ToDictionary(v => v.Key, v => v.Value);
+
+            return JoinPrivileges(privilege1, privilage2Modified);
+        }
+
+        private Privileges JoinPrivileges(Privileges privilege1, Privileges privilege2)
+        {
+            var newPriv = privilege1.ToDictionary(x => x.Key, x => x.Value.ToDictionary(y => y.Key, y => y.Value));
+            var intersection = privilege1.Keys.Intersect(privilege2.Keys);
+            foreach(var logicalName in intersection)
+            {
+                var a1 = privilege1[logicalName];
+                var a2 = privilege2[logicalName];
+                var aJoined = JoinAccess(a1, a2);
+                newPriv.Remove(logicalName);
+                newPriv.Add(logicalName, aJoined);
+            }
+            foreach (var logicalName in privilege2.Keys.Except(intersection))
+            {
+                newPriv.Add(logicalName, privilege2[logicalName]);
+            }
+            return newPriv;
+        }
+
+        internal void AddPrinciplePrivileges(Guid principleId, Privileges privileges)
+        {
+            // TODO: Handle basic privilege of the user does not have access yet.
+            var currentPrivileges = new Privileges();
+            if (PrinciplePrivilages.ContainsKey(principleId))
+            {
+                currentPrivileges = PrinciplePrivilages[principleId];
+            }
+
+            // Combine users current privilege with the securityRoles
+            currentPrivileges = JoinPrivileges(currentPrivileges, privileges);
+
+            // Update the principles privileges;
+            if (PrinciplePrivilages.ContainsKey(principleId))
+            {
+                PrinciplePrivilages.Remove(principleId);
+            }
+            PrinciplePrivilages.Add(principleId, currentPrivileges);
+        } 
+
+        private void AddPrinciplePrivlieges(Guid principleId, Guid[] roles)
+        {
+            if (!roles.Any())
+            {
+                return;
+            }
+
+            // Get users current privilgees
+            var currentPrivileges = new Privileges();
+            if (PrinciplePrivilages.ContainsKey(principleId))
+            {
+                currentPrivileges = PrinciplePrivilages[principleId];
+            }
+
+            // Combine users current privilege with the securityRoles
+            foreach (var roleId in roles)
+            {
+                var securityRolePrivilages = SecurityRoles[roleId].Privileges;
+
+                currentPrivileges = JoinPrivileges(currentPrivileges, securityRolePrivilages);
+            }
+
+            // Update the principles privileges;
+            if (PrinciplePrivilages.ContainsKey(principleId))
+            {
+                PrinciplePrivilages.Remove(principleId);
+            }
+            PrinciplePrivilages.Add(principleId, currentPrivileges);
+        }
+
+        internal void SetSecurityRole(EntityReference entRef, Guid[] secRoles)
+        {
+            if (!secRoles.Any())
+            {
+                return;
+            }
+
+            AddPrinciplePrivlieges(entRef.Id, secRoles);
+            if (secRoles.Any(s => !SecurityRoles.ContainsKey(s)))
             {
                 throw new MockupException($"Unknown security role");
             }
             var user = Core.GetDbRow(entRef).ToEntity();
             var relationship = entRef.LogicalName == LogicalNames.SystemUser ? new Relationship("systemuserroles_association") : new Relationship("teamroles_association");
-            var roles = securityRoles
+            var roles = secRoles
                 .Select(sr => SecurityRoleMapping.Where(srm => srm.Value == sr).Select(srm => srm.Key))
                 .Select(roleGuids =>
                     Core.GetDbTable("role")
@@ -228,9 +369,9 @@ namespace DG.Tools.XrmMockup
         internal HashSet<SecurityRole> GetSecurityRoles(EntityReference caller)
         {
             var securityRoles = new HashSet<SecurityRole>();
-            var callerEntity = Core.GetDbEntityWithRelatedEntities(caller, EntityRole.Referenced, Core.AdminUserRef);
-            if (callerEntity == null) return securityRoles;
             var relationship = caller.LogicalName == LogicalNames.SystemUser ? new Relationship("systemuserroles_association") : new Relationship("teamroles_association");
+            var callerEntity = Core.GetDbEntityWithRelatedEntities(caller, EntityRole.Referenced, Core.AdminUserRef, null, relationship);
+            if (callerEntity == null) return securityRoles;
             var roles = callerEntity.RelatedEntities.ContainsKey(relationship) ? callerEntity.RelatedEntities[relationship] : new EntityCollection();
             foreach (var role in roles.Entities)
             {
@@ -239,11 +380,11 @@ namespace DG.Tools.XrmMockup
             return securityRoles;
         }
 
-        private bool HasOwnerTeamAccess(EntityReference owner, EntityReference caller)
+        private bool IsMemberOfTeam(EntityReference team, EntityReference user)
         {
             return Core.GetDbTable(LogicalNames.TeamMembership)
                 .Select(x => x.ToEntity())
-                .Where(tm => tm.GetAttributeValue<Guid>("systemuserid") == caller.Id && tm.GetAttributeValue<Guid>("teamid") == owner.Id)
+                .Where(tm => tm.GetAttributeValue<Guid>("systemuserid") == user.Id && tm.GetAttributeValue<Guid>("teamid") == team.Id)
                 .Any();
         }
 
@@ -276,13 +417,13 @@ namespace DG.Tools.XrmMockup
 
             var owner = entity.GetAttributeValue<EntityReference>("ownerid");
 
-            // Check owner access rights
-            if (owner.LogicalName == LogicalNames.Team && HasOwnerTeamAccess(owner, caller))
+            // Check if owner is a team, and if user is member of that team, then check access for that team
+            if (owner.LogicalName == LogicalNames.Team && IsMemberOfTeam(owner, caller))
             {
-                return true;
+                return HasPermission(entity, access, owner);
             }
 
-            // Check if teams have access
+            // Check if any teams that the user is a member of have access 
             var teamIds = Core.GetDbTable(LogicalNames.TeamMembership)
             .Select(x => x.ToEntity())
             .Where(tm => tm.GetAttributeValue<Guid>("systemuserid") == caller.Id)
@@ -294,16 +435,18 @@ namespace DG.Tools.XrmMockup
 
         internal bool HasCallerPermission(Entity entity, AccessRights access, EntityReference caller)
         {
-            // finds all callers securityroles which grant access permission to the entity
-            var callerRoles = GetSecurityRoles(caller)?
-                .Where(r =>
-                    r.Privileges.ContainsKey(entity.LogicalName) &&
-                    r.Privileges[entity.LogicalName].ContainsKey(access));
+            var privilages = GetPrincipalPrivilege(caller.Id);
 
-            if (callerRoles == null || callerRoles.Count() == 0) return false;
+            if (privilages == null)
+                return false;
 
-            // Finds the securityrole with the maximum privilegeDepth
-            var maxRole = callerRoles.Max(r => r.Privileges[entity.LogicalName][access].PrivilegeDepth);
+            if (!privilages.ContainsKey(entity.LogicalName))
+                return false;
+
+            if (!privilages[entity.LogicalName].ContainsKey(access))
+                return false;
+
+            var maxRole  = privilages[entity.LogicalName][access];
 
             // if max privelege depth is global, then caller can access all entities
             if (maxRole == PrivilegeDepth.Global) return true;
@@ -332,13 +475,11 @@ namespace DG.Tools.XrmMockup
 
             if (maxRole == PrivilegeDepth.Deep)
             {
-                // if the owner-user or the owner-team is in one of the child BUs of the callers parent BU or BU, he has access
-                if (callerRow.GetColumn<DbRow>("parentbusinessunitid") != null && IsInBusinessUnitTree(owner, callerRow.GetColumn<DbRow>("parentbusinessunitid").Id))
-                    return true;
-                else if (IsInBusinessUnitTree(owner, callerRow.GetColumn<DbRow>("businessunitid").Id))
+                // if the owner-user or the owner-team is in the same BU, or sub BU's, as the caller, he has access
+                if (IsInBusinessUnitTree(owner, callerRow.GetColumn<DbRow>("businessunitid").Id))
                     return true;
             }
-            
+
             return false;
         }
 
@@ -348,6 +489,11 @@ namespace DG.Tools.XrmMockup
             return (Shares.ContainsKey(entityRef) &&
                 Shares[entityRef].ContainsKey(caller) &&
                 Shares[entityRef][caller].HasFlag(access));
+        }
+
+        internal bool HasPermission(EntityReference entityReference, AccessRights access, EntityReference caller)
+        {
+            return HasPermission(Core.GetDbRow(entityReference).ToEntity(), access, caller);
         }
 
         internal bool HasPermission(Entity entity, AccessRights access, EntityReference caller)
@@ -386,11 +532,13 @@ namespace DG.Tools.XrmMockup
 
         public Security Clone()
         {
-            return new Security(this.Core, this.Metadata, this.SecurityRoles.Values.ToList())
+            var s =  new Security(this.Core, this.Metadata, this.SecurityRoles.Values.ToList())
             {
                 SecurityRoleMapping = this.SecurityRoleMapping.ToDictionary(x => x.Key, x => x.Value),
                 Shares = this.Shares.ToDictionary(x => x.Key, x => x.Value.ToDictionary(y => y.Key, y => y.Value))
             };
+            s.PrinciplePrivilages = this.PrinciplePrivilages.ToDictionary(x => x.Key, x => x.Value.ToDictionary(y => y.Key, y => y.Value));
+            return s;
         }
     }
 }

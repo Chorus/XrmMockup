@@ -18,10 +18,21 @@ namespace DG.Tools.XrmMockup {
             var request = MakeRequest<RetrieveMultipleRequest>(orgRequest);
             var queryExpr = request.Query as QueryExpression;
             var fetchExpr = request.Query as FetchExpression;
-            if (queryExpr == null) {
+            var queryByAttr = request.Query as QueryByAttribute;
+            if (fetchExpr != null) {
                 queryExpr = XmlHandling.FetchXmlToQueryExpression(fetchExpr.Query);
             }
+            else if (queryByAttr != null)
+            {
+                queryExpr = Utility.QueryByAttributeToQueryExpression(queryByAttr);
+            }
 
+            if (queryExpr.EntityName == null)
+            {
+                throw new FaultException("The 'RetrieveMultiple' method does not support entities of type 'none'");
+            }
+
+            FillAliasIfEmpty(queryExpr);
             var collection = new EntityCollection();
             db.PrefillDBWithOnlineData(queryExpr);
             var rows = db.GetDBEntityRows(queryExpr.EntityName);
@@ -32,10 +43,13 @@ namespace DG.Tools.XrmMockup {
                     var entity = row.ToEntity();
                     var toAdd = core.GetStronglyTypedEntity(entity, row.Metadata, null);
 
+                    Utility.SetFormmattedValues(db, toAdd, row.Metadata);
+
                     if (queryExpr.LinkEntities.Count > 0) {
                         foreach (var linkEntity in queryExpr.LinkEntities) {
+                            var alliasedValues = GetAliasedValuesFromLinkentity(linkEntity, entity, toAdd, db);
                             collection.Entities.AddRange(
-                                GetAliasedValuesFromLinkentity(linkEntity, entity, toAdd, db)
+                                alliasedValues
                                 .Where(e => Utility.MatchesCriteria(e, queryExpr.Criteria)));
                         }
                     } else if(Utility.MatchesCriteria(toAdd, queryExpr.Criteria)) {
@@ -92,8 +106,11 @@ namespace DG.Tools.XrmMockup {
                 colToReturn = filteredEntities;
             }
 
-            
+            // According to docs, should return -1 if ReturnTotalRecordCount set to false
+            colToReturn.TotalRecordCount = queryExpr.PageInfo.ReturnTotalRecordCount ? colToReturn.Entities.Count : -1;
+
             var resp = new RetrieveMultipleResponse();
+
             resp.Results["EntityCollection"] = colToReturn;
             return resp;
         }
@@ -119,10 +136,10 @@ namespace DG.Tools.XrmMockup {
                             var subEntities = new List<Entity>();
                             foreach (var nestedLinkEntity in linkEntity.LinkEntities) {
                                 nestedLinkEntity.LinkFromEntityName = linkEntity.LinkToEntityName;
-                                subEntities.AddRange(
-                                    GetAliasedValuesFromLinkentity(
-                                        nestedLinkEntity, linkedEntity, aliasedEntity, db)
-                                        .Where(e => Utility.MatchesCriteria(e, nestedLinkEntity.LinkCriteria)));
+                                var alliasedLinkValues = GetAliasedValuesFromLinkentity(
+                                        nestedLinkEntity, linkedEntity, aliasedEntity, db);
+                                subEntities.AddRange(alliasedLinkValues
+                                        .Where(e => Utility.MatchesCriteria(e, linkEntity.LinkCriteria)));
                             }
                             collection.AddRange(subEntities);
                         } else if(Utility.MatchesCriteria(aliasedEntity, linkEntity.LinkCriteria)) {
@@ -153,5 +170,61 @@ namespace DG.Tools.XrmMockup {
             entity.Attributes.Clear();
             entity.Attributes.AddRange(clone.Attributes);
         }
+
+        private void FillAliasIfEmpty(QueryExpression expression)
+        {
+            if (expression.LinkEntities.Count == 0)
+                return;
+
+            int depth = 1;
+            foreach (var le in expression.LinkEntities)
+            {
+                FillAliasIfEmpty(le, ref depth);
+            }
+        }
+
+        private void FillAliasIfEmpty(LinkEntity linkEntity, ref int linkCount)
+        {
+            if(linkEntity.EntityAlias == null)
+            {
+                linkEntity.EntityAlias = $"{linkEntity.LinkToEntityName}{linkCount}";
+                linkCount++;
+            }
+#if !(XRM_MOCKUP_2011)
+            if (linkEntity.LinkCriteria != null)
+            {
+                FillEntityNameIfEmpty(linkEntity.LinkCriteria, linkEntity.EntityAlias);
+            }
+#endif
+            if (linkEntity.LinkEntities.Count > 0)
+            {
+                foreach (var le in linkEntity.LinkEntities)
+                {
+                    FillAliasIfEmpty(le, ref linkCount);
+                }
+            }
+        }
+#if !(XRM_MOCKUP_2011)
+        private void FillEntityNameIfEmpty(FilterExpression filter, string alias)
+        {
+            foreach (var cond in filter.Conditions)
+            {
+                FillEntityNameIfEmpty(cond, alias);
+            }
+            foreach (var subFilter in filter.Filters)
+            {
+                FillEntityNameIfEmpty(subFilter, alias);
+            }
+        }
+
+        private void FillEntityNameIfEmpty(ConditionExpression condition, string alias)
+        {
+            if (condition.EntityName != null)
+            {
+                return;
+            }
+            condition.EntityName = alias;
+        }
+#endif
     }
 }

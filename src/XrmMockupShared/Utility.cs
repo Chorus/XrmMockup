@@ -86,7 +86,7 @@ namespace DG.Tools.XrmMockup
             return clone.SetAttributes(entity.Attributes, metadata, cols);
         }
 
-        public static bool IsSettableAttribute(string attrName, EntityMetadata metadata)
+        public static bool IsValidAttribute(string attrName, EntityMetadata metadata)
         {
             if (metadata == null || attrName.Contains("."))
             {
@@ -107,12 +107,21 @@ namespace DG.Tools.XrmMockup
 
             if (colsToKeep != null && !colsToKeep.AllColumns)
             {
+                foreach (var col in colsToKeep.Columns)
+                {
+                    if (!IsValidAttribute(col, metadata))
+                    {
+                        throw new MockupException($"'{entity.LogicalName}' entity doesn't contain attribute with Name = '{col}'");
+                    }
+                }
+
+                // Can't this be optimized to not go through all attributes in the entity?
                 HashSet<string> keep = new HashSet<string>(colsToKeep.Columns);
                 foreach (var attr in attributes)
                 {
-                    if (!IsSettableAttribute(attr.Key, metadata))
+                    if (!IsValidAttribute(attr.Key, metadata))
                     {
-                        throw new FaultException($"'{entity.LogicalName}' entity doesn't contain attribute with Name = '{attr.Key}'");
+                        throw new MockupException($"'{entity.LogicalName}' entity doesn't contain attribute with Name = '{attr.Key}'");
                     }
                     if (keep.Contains(attr.Key)) entity.Attributes[attr.Key] = attr.Value;
                 }
@@ -121,7 +130,7 @@ namespace DG.Tools.XrmMockup
             {
                 foreach (var attr in attributes)
                 {
-                    if (!IsSettableAttribute(attr.Key, metadata))
+                    if (!IsValidAttribute(attr.Key, metadata))
                     {
                         throw new FaultException($"'{entity.LogicalName}' entity doesn't contain attribute with Name = '{attr.Key}'");
                     }
@@ -583,7 +592,6 @@ namespace DG.Tools.XrmMockup
             }
 
             attr = ConvertToComparableObject(attr);
-            if (attr is EntityReference entityRef) { attr = entityRef.Id; }
             var values = condition.Values.Select(ConvertToComparableObject);
             return Matches(attr, condition.Operator, values);
         }
@@ -653,6 +661,9 @@ namespace DG.Tools.XrmMockup
                 case ConditionOperator.LessThan:
                     return Compare((IComparable)attr, op, (IComparable)values.First());
 
+                case ConditionOperator.NotLike:
+                    return !Matches(attr, ConditionOperator.Like, values);
+
                 case ConditionOperator.Like:
                     if (attr == null)
                         return false;
@@ -660,7 +671,7 @@ namespace DG.Tools.XrmMockup
                     var pattern = (string)values.First();
                     if (pattern.First() == '%' && (pattern.Last() == '%'))
                     {
-                        return sAttr.Contains(pattern.Substring(1, pattern.Length - 1));
+                        return sAttr.Contains(pattern.Substring(1, pattern.Length - 2));
                     }
                     else if (pattern.First() == '%')
                     {
@@ -767,7 +778,7 @@ namespace DG.Tools.XrmMockup
 
         internal static void Touch(Entity dbEntity, EntityMetadata metadata, TimeSpan timeOffset, EntityReference user)
         {
-            if (IsSettableAttribute("modifiedon", metadata) && IsSettableAttribute("modifiedby", metadata))
+            if (IsValidAttribute("modifiedon", metadata) && IsValidAttribute("modifiedby", metadata))
             {
                 dbEntity["modifiedon"] = DateTime.UtcNow.Add(timeOffset);
                 dbEntity["modifiedby"] = user;
@@ -927,7 +938,7 @@ namespace DG.Tools.XrmMockup
             pointer["actualend"] = entity.GetAttributeValue<DateTime>("actualend");
             pointer["actualstart"] = entity.GetAttributeValue<DateTime>("actualstart");
             pointer["description"] = entity.GetAttributeValue<string>("description");
-            pointer["deliveryprioritycode"] = entity.GetAttributeValue<int>("deliveryprioritycode");
+            pointer["deliveryprioritycode"] = entity.GetAttributeValue<OptionSetValue>("deliveryprioritycode");
             pointer["isbilled"] = entity.GetAttributeValue<bool>("isbilled");
             pointer["isregularactivity"] = entity.GetAttributeValue<bool>("isregularactivity");
             pointer["isworkflowcreated"] = entity.GetAttributeValue<bool>("isworkflowcreated");
@@ -961,6 +972,125 @@ namespace DG.Tools.XrmMockup
                     break;
             }
             return pointer;
+        }
+
+        private static Boolean IsValidForFormattedValues(AttributeMetadata attributeMetadata)
+        {
+            return
+                attributeMetadata is PicklistAttributeMetadata ||
+                attributeMetadata is BooleanAttributeMetadata ||
+                attributeMetadata is MoneyAttributeMetadata ||
+                attributeMetadata is LookupAttributeMetadata ||
+                attributeMetadata is IntegerAttributeMetadata ||
+                attributeMetadata is DateTimeAttributeMetadata ||
+                attributeMetadata is MemoAttributeMetadata ||
+                attributeMetadata is DoubleAttributeMetadata ||
+                attributeMetadata is DecimalAttributeMetadata;
+        }
+
+        private static string GetFormattedValueLabel(XrmDb db, AttributeMetadata metadataAtt, object value, Entity entity)
+        {
+            if (metadataAtt is PicklistAttributeMetadata)
+            {
+                var optionset = (metadataAtt as PicklistAttributeMetadata).OptionSet.Options
+                    .Where(opt => opt.Value == (value as OptionSetValue).Value).FirstOrDefault();
+                return optionset.Label.UserLocalizedLabel.Label;
+            }
+
+            if (metadataAtt is BooleanAttributeMetadata)
+            {
+                var booleanOptions = (metadataAtt as BooleanAttributeMetadata).OptionSet;
+                var label = (bool)value ? booleanOptions.TrueOption.Label : booleanOptions.FalseOption.Label;
+                return label.UserLocalizedLabel.Label;
+            }
+
+            if (metadataAtt is MoneyAttributeMetadata)
+            {
+                var currencysymbol =
+                    db.GetEntity(
+                        db.GetEntity(entity.ToEntityReference())
+                        .GetAttributeValue<EntityReference>("transactioncurrencyid"))
+                    .GetAttributeValue<string>("currencysymbol");
+
+                return currencysymbol + (value as Money).Value.ToString();
+            }
+
+            if (metadataAtt is LookupAttributeMetadata)
+            {
+                try
+                {
+                    return (value as EntityReference).Name;
+                }
+                catch (NullReferenceException e)
+                {
+                    Console.WriteLine("No lookup entity exists: " + e.Message);
+                }
+            }
+
+            if (metadataAtt is IntegerAttributeMetadata ||
+                metadataAtt is DateTimeAttributeMetadata ||
+                metadataAtt is MemoAttributeMetadata ||
+                metadataAtt is DoubleAttributeMetadata ||
+                metadataAtt is DecimalAttributeMetadata)
+            {
+                return value.ToString();
+            }
+
+            return null;
+        }
+
+        internal static void SetFormmattedValues(XrmDb db, Entity entity, EntityMetadata metadata)
+        {
+            var validMetadata = metadata.Attributes
+                .Where(a => IsValidForFormattedValues(a));
+
+            var formattedValues = new List<KeyValuePair<string, string>>();
+            foreach (var a in entity.Attributes)
+            {
+                if (a.Value == null) continue;
+                var metadataAtt = validMetadata.Where(m => m.LogicalName == a.Key).FirstOrDefault();
+                var formattedValuePair = new KeyValuePair<string, string>(a.Key, Utility.GetFormattedValueLabel(db, metadataAtt, a.Value, entity));
+                if (formattedValuePair.Value != null)
+                {
+                    formattedValues.Add(formattedValuePair);
+                }
+            }
+
+            if (formattedValues.Count > 0)
+            {
+                entity.FormattedValues.AddRange(formattedValues);
+            }
+        }
+
+        public static QueryExpression QueryByAttributeToQueryExpression(QueryByAttribute query)
+        {
+            var ret = new QueryExpression
+            {
+                EntityName = query.EntityName,
+                TopCount = query.TopCount,
+                PageInfo = query.PageInfo,
+                ColumnSet = query.ColumnSet,
+            };
+
+            for (var i = 0; i <= query.Attributes.Count - 1; i++)
+            {
+                ret.Criteria.Conditions.Add(new ConditionExpression(query.Attributes[i], ConditionOperator.Equal, query.Values[i]));
+            }
+
+            return ret;
+        }
+
+        public static Entity CreateDefaultTeam(Entity rootBusinessUnit, EntityReference useReference)
+        {
+            var defaultTeam = new Entity(LogicalNames.Team);
+            defaultTeam["name"] = rootBusinessUnit.Attributes["name"];
+            defaultTeam["teamtype"] = new OptionSetValue(0);
+            defaultTeam["isdefault"] = true;
+            defaultTeam["description"] = "Default team for the parent business unit. The name and membership for default team are inherited from their parent business unit.";
+            defaultTeam["administratorid"] = useReference;
+            defaultTeam["businessunitid"] = rootBusinessUnit.ToEntityReference();
+
+            return defaultTeam;
         }
     }
 
