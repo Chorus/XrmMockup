@@ -307,7 +307,7 @@ namespace DG.Tools.XrmMockup
             if (prevValueOptionMeta == null) return;
 
             var transitions = prevValueOptionMeta.TransitionData;
-            if (transitions != null && transitions != "" && 
+            if (transitions != null && transitions != "" &&
                 IsValidStatusTransition(transitions, newValue.Value)) return;
 
             throw new FaultException($"Trying to switch {newEntity.LogicalName} from status {prevValue.Value} to {newValue.Value}");
@@ -558,12 +558,12 @@ namespace DG.Tools.XrmMockup
         public static bool MatchesCriteria(Entity row, FilterExpression criteria)
         {
             if (criteria.FilterOperator == LogicalOperator.And)
-                return criteria.Filters.All(f => 
-                    MatchesCriteria(row, f)) && 
+                return criteria.Filters.All(f =>
+                    MatchesCriteria(row, f)) &&
                     criteria.Conditions.All(c => EvaluateCondition(row, c));
             else
-                return criteria.Filters.Any(f => 
-                    MatchesCriteria(row, f)) || 
+                return criteria.Filters.Any(f =>
+                    MatchesCriteria(row, f)) ||
                     criteria.Conditions.Any(c => EvaluateCondition(row, c));
         }
 
@@ -592,6 +592,10 @@ namespace DG.Tools.XrmMockup
             }
 
             attr = ConvertToComparableObject(attr);
+            if (attr is EntityReference entityRef)
+            {
+                attr = entityRef.Id;
+            }
             var values = condition.Values.Select(ConvertToComparableObject);
             return Matches(attr, condition.Operator, values);
         }
@@ -620,7 +624,8 @@ namespace DG.Tools.XrmMockup
         public static object ConvertTo(object obj, Type targetType)
         {
             if (targetType == null) { return obj; }
-            if(obj is string && !typeof(IConvertible).IsAssignableFrom(targetType)) {
+            if (obj is string && !typeof(IConvertible).IsAssignableFrom(targetType))
+            {
                 var parse = targetType.GetMethod(
                     nameof(Guid.Parse),
                     BindingFlags.Static | BindingFlags.Public,
