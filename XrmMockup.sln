@@ -74,17 +74,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestPluginAssembly365", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XrmMockup365Test", "tests\XrmMockup365Test\XrmMockup365Test.csproj", "{54E48688-CE01-4310-90D9-0902E0A51814}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XrmMockup365", "src\XrmMockup365\XrmMockup365.csproj", "{8D6B46F6-D7BD-480D-9D63-3B00285079DD}"
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "MetadataGen", "MetadataGen", "{E75407BE-AEA4-480C-8307-1C41851DB58B}"
-EndProject
-Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "MetadataSkeleton", "src\MetadataSkeleton\MetadataSkeleton.shproj", "{FDDB9BF5-4D33-495D-91A4-DFE919CF96CE}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MetadataGenerator365", "src\MetadataGen\MetadataGenerator365\MetadataGenerator365.csproj", "{798DDA68-50B2-4596-800C-6BE2BFC2A6CC}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestPluginAssembly365", "tests\TestPluginAssembly365\TestPluginAssembly365.csproj", "{5AA8D4E7-03AF-476B-B61F-5F9A6C5DADEA}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "XrmMockup365Test", "tests\XrmMockup365Test\XrmMockup365Test.csproj", "{54E48688-CE01-4310-90D9-0902E0A51814}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "XrmMockup365", "src\XrmMockup365\XrmMockup365.csproj", "{8D6B46F6-D7BD-480D-9D63-3B00285079DD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{149E3AC2-DE25-4F25-98CA-04B2B397911E}"
@@ -93,6 +82,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{149E3AC2
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tools", "Tools\Tools.csproj", "{D375A019-3229-4D24-955B-06248D1D12F5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3A832071-17C0-4F94-8592-4060E11AB731}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
@@ -138,12 +132,6 @@ Global
 		src\MetadataSkeleton\MetadataSkeleton.projitems*{f57425c1-13cb-483b-bdde-605d9a712f4a}*SharedItemsImports = 4
 		src\MetadataSkeleton\MetadataSkeleton.projitems*{fddb9bf5-4d33-495d-91a4-dfe919cf96ce}*SharedItemsImports = 13
 	EndGlobalSection
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3A832071-17C0-4F94-8592-4060E11AB731}"
-	ProjectSection(SolutionItems) = preProject
-		.gitignore = .gitignore
-	EndProjectSection
-EndProject
-Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
@@ -261,9 +249,6 @@ Global
 		{5AA8D4E7-03AF-476B-B61F-5F9A6C5DADEA} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{54E48688-CE01-4310-90D9-0902E0A51814} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{8D6B46F6-D7BD-480D-9D63-3B00285079DD} = {DBD51D6F-392E-497E-B4F7-73D6CE6CBC34}
-		{798DDA68-50B2-4596-800C-6BE2BFC2A6CC} = {E75407BE-AEA4-480C-8307-1C41851DB58B}
-		{5AA8D4E7-03AF-476B-B61F-5F9A6C5DADEA} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
-		{54E48688-CE01-4310-90D9-0902E0A51814} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7565DA42-40CA-442E-B85C-DB64B497DFAB}
