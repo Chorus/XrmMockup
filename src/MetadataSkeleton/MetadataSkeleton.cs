@@ -14,9 +14,104 @@ namespace DG.Tools.XrmMockup {
         public List<MetaPlugin> Plugins;
         public OptionSetMetadataBase[] OptionSets;
         public Dictionary<string, Dictionary<int,int>> DefaultStateStatus;
+
+        public void Merge(MetadataSkeleton metadata)
+        {
+            foreach (var kvp in metadata.EntityMetadata)
+            {
+                if (this.EntityMetadata.ContainsKey(kvp.Key)) 
+                {
+                    var existing = this.EntityMetadata[kvp.Key];
+                    var incoming = kvp.Value;
+
+                    // Merge Attributes
+                    if (incoming.Attributes != null)
+                    {
+                        var existingAttributes = existing.Attributes != null 
+                            ? new List<AttributeMetadata>(existing.Attributes) 
+                            : new List<AttributeMetadata>();
+                            
+                        var existingNames = new HashSet<string>();
+                        foreach(var a in existingAttributes) existingNames.Add(a.LogicalName);
+                        
+                        bool changed = false;
+                        foreach (var attr in incoming.Attributes)
+                        {
+                            if (!existingNames.Contains(attr.LogicalName))
+                            {
+                                existingAttributes.Add(attr);
+                                existingNames.Add(attr.LogicalName);
+                                changed = true;
+                            }
+                        }
+                        
+                        if (changed)
+                        {
+                            existing.GetType().GetProperty("Attributes").SetValue(existing, existingAttributes.ToArray());
+                        }
+                    }
+
+                    // Merge OwnershipType
+                    if (!existing.OwnershipType.HasValue && incoming.OwnershipType.HasValue)
+                    {
+                        existing.GetType().GetProperty("OwnershipType").SetValue(existing, incoming.OwnershipType);
+                    }
+                    
+                    // Merge PrimaryIdAttribute
+                    if (string.IsNullOrEmpty(existing.PrimaryIdAttribute) && !string.IsNullOrEmpty(incoming.PrimaryIdAttribute))
+                    {
+                        existing.GetType().GetProperty("PrimaryIdAttribute").SetValue(existing, incoming.PrimaryIdAttribute);
+                    }
+                    
+                    // Merge PrimaryNameAttribute
+                    if (string.IsNullOrEmpty(existing.PrimaryNameAttribute) && !string.IsNullOrEmpty(incoming.PrimaryNameAttribute))
+                    {
+                        existing.GetType().GetProperty("PrimaryNameAttribute").SetValue(existing, incoming.PrimaryNameAttribute);
+                    }
+                    
+                    // Merge EntitySetName
+                    if (string.IsNullOrEmpty(existing.EntitySetName) && !string.IsNullOrEmpty(incoming.EntitySetName))
+                    {
+                        existing.GetType().GetProperty("EntitySetName").SetValue(existing, incoming.EntitySetName);
+                    }
+
+                    continue;
+                }
+                
+                this.EntityMetadata.Add(kvp.Key, kvp.Value);
+
+                //also need to merge the default state and status for this entity
+                if (metadata.DefaultStateStatus.ContainsKey(kvp.Key)) { 
+                    var defaultSS = metadata.DefaultStateStatus[kvp.Key];
+                    var dict = new Dictionary<int, int>();
+                    foreach (var kvp2 in defaultSS)
+                    {
+                        dict.Add(kvp2.Key, kvp2.Value);
+                    }
+
+                    this.DefaultStateStatus.Add(kvp.Key, dict);
+                }
+
+                if (metadata.DefaultStateStatus.ContainsKey(kvp.Key))
+                {
+                    if (!this.DefaultStateStatus.ContainsKey(kvp.Key))
+                    {
+                        var defaultSS = metadata.DefaultStateStatus[kvp.Key];
+                        var dict = new Dictionary<int, int>();
+                        foreach (var kvp2 in defaultSS)
+                        {
+                            dict.Add(kvp2.Key, kvp2.Value);
+                        }
+
+                        this.DefaultStateStatus.Add(kvp.Key, dict);
+                    }
+                }
+            }
+        }
     }
 
-    public class MetaPlugin {
+    public class MetaPlugin
+    {
         public string FilteredAttributes;
         public int Mode;
         public string Name;
@@ -24,8 +119,11 @@ namespace DG.Tools.XrmMockup {
         public int Stage;
         public string MessageName;
         public string AssemblyName;
+        public string PluginTypeAssemblyName;
         public string PrimaryEntity;
+        public bool AsyncAutoDelete;
         public List<MetaImage> Images;
+        public Guid? ImpersonatingUserId;
     }
 
     public class MetaImage
@@ -44,6 +142,19 @@ namespace DG.Tools.XrmMockup {
         public bool CanBeBasic;
         public AccessRights AccessRight;
         public PrivilegeDepth PrivilegeDepth;
+
+        public RolePrivilege Clone()
+        {
+            var clone = new RolePrivilege();
+            clone.CanBeGlobal = this.CanBeGlobal;
+            clone.CanBeDeep = this.CanBeDeep;
+            clone.CanBeLocal = this.CanBeLocal;
+            clone.CanBeLocal = this.CanBeLocal;
+            clone.AccessRight = this.AccessRight;
+            clone.PrivilegeDepth = this.PrivilegeDepth;
+
+            return clone;
+        }
     }
 
     public class SecurityRole {
@@ -52,5 +163,29 @@ namespace DG.Tools.XrmMockup {
         public EntityReference BusinessUnitId;
         public Guid RoleId;
         public Guid RoleTemplateId;
+
+        public SecurityRole Clone()
+        {
+            var clone = new SecurityRole();
+            clone.Privileges = new Dictionary<string, Dictionary<AccessRights, RolePrivilege>>();
+            foreach (var priv in this.Privileges)
+            {
+                var newV = new Dictionary<AccessRights, RolePrivilege>();
+                foreach (var v in priv.Value)
+                {
+                    newV.Add(v.Key, new RolePrivilege() { AccessRight = v.Value.AccessRight, CanBeBasic = v.Value.CanBeBasic, CanBeDeep = v.Value.CanBeDeep, CanBeGlobal = v.Value.CanBeGlobal, CanBeLocal = v.Value.CanBeLocal, PrivilegeDepth = v.Value.PrivilegeDepth });
+                }
+
+                var p = new KeyValuePair<string, Dictionary<AccessRights, RolePrivilege>>(priv.Key, newV);
+                clone.Privileges.Add(p.Key, p.Value);
+            }
+
+            clone.Name = "Clone of " + this.Name;
+            clone.BusinessUnitId = this.BusinessUnitId;
+            clone.RoleId = Guid.NewGuid();
+            clone.RoleTemplateId = this.RoleTemplateId;
+
+            return clone;
+        }
     }
 }
