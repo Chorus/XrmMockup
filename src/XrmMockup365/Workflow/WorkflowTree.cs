@@ -104,10 +104,25 @@ namespace WorkflowExecuter
         public WorkflowTree Execute(Entity primaryEntity, TimeSpan timeOffset,
             IOrganizationService orgService, IOrganizationServiceFactory factory, ITracingService trace)
         {
+            if (primaryEntity == null)
+            {
+                throw new ArgumentNullException(nameof(primaryEntity));
+            }
+            if (primaryEntity.Attributes == null)
+            {
+                primaryEntity.Attributes = new AttributeCollection();
+            }
+
             if (primaryEntity.Id == Guid.Empty)
             {
                 throw new WorkflowException("The primary entity must have an id");
             }
+
+            if (StartActivity == null)
+            {
+                return this;
+            }
+
             Reset();
             Variables["InputEntities(\"primaryEntity\")"] = primaryEntity;
             Variables["ExecutionTime"] = DateTime.Now.Add(timeOffset);

@@ -4,6 +4,7 @@
 		<DebugType>portable</DebugType>
 		<Title>XrmMockup365Test</Title>
 		<RootNamespace>DG.XrmMockupTest</RootNamespace>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
 		<Optimize>false</Optimize>

@@ -747,6 +747,11 @@ namespace DG.Tools.XrmMockup
                 pluginContext.InputParameters[prop.Key] = prop.Value;
             }
 
+            if (request.Parameters.ContainsKey("tag"))
+            {
+                pluginContext.SharedVariables["tag"] = request.Parameters["tag"];
+            }
+
             if (parentPluginContext != null)
             {
                 pluginContext.ParentContext = parentPluginContext;
@@ -813,6 +818,17 @@ namespace DG.Tools.XrmMockup
 
             // Core operation
             OrganizationResponse response = ExecuteRequest(request, userRef, parentPluginContext, pluginContext);
+
+            if (request.RequestName == "Create")
+            {
+                var cResp = response as CreateResponse;
+                primaryRef.Id = cResp.id;
+                pluginContext.PrimaryEntityId = cResp.id;
+                if (entityInfo.Item1 is Entity targetEntity)
+                {
+                    targetEntity.Id = cResp.id;
+                }
+            }
 
             // Post-operation
             if (shouldTrigger)
@@ -1138,8 +1154,30 @@ namespace DG.Tools.XrmMockup
         private Tuple<object, string, Guid> GetEntityInfo(OrganizationRequest request)
         {
             Mappings.EntityImageProperty.TryGetValue(request.GetType(), out string key);
+
+            if (key == null && request.GetType() == typeof(OrganizationRequest))
+            {
+                switch (request.RequestName)
+                {
+                    case "Create":
+                    case "Update":
+                    case "Delete":
+                    case "Retrieve":
+                    case "Assign":
+                    case "Associate":
+                    case "Disassociate":
+                    case "Merge":
+                    case "Upsert":
+                        key = "Target";
+                        break;
+                    case "SetState":
+                        key = "EntityMoniker";
+                        break;
+                }
+            }
+
             object obj = null;
-            if (key != null)
+            if (key != null && request.Parameters.Contains(key))
             {
                 obj = request.Parameters[key];
             }

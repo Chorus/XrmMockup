@@ -13,7 +13,7 @@ using DG.Tools.XrmMockup.Internal;
 namespace DG.Tools.XrmMockup.Database {
 
     internal class XrmDb {
-        private Dictionary<string, DbTable> TableDict = new Dictionary<string, DbTable>();
+        private Dictionary<string, DbTable> TableDict = new Dictionary<string, DbTable>(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, EntityMetadata> EntityMetadata;
         private OrganizationServiceProxy OnlineProxy;
         private int sequence;
@@ -40,6 +40,7 @@ namespace DG.Tools.XrmMockup.Database {
         {
             int nextSequence = Interlocked.Increment(ref sequence);
             var dbEntity = ToDbRow(xrmEntity,nextSequence, withReferenceChecks);
+            xrmEntity.Id = dbEntity.Id;
             this[dbEntity.Table.TableName][dbEntity.Id] = dbEntity;
         }
 
@@ -253,7 +254,7 @@ namespace DG.Tools.XrmMockup.Database {
 
         public XrmDb Clone()
         {
-            var clonedTables = this.TableDict.ToDictionary(x => x.Key, x => x.Value.Clone());
+            var clonedTables = new Dictionary<string, DbTable>(this.TableDict.ToDictionary(x => x.Key, x => x.Value.Clone()), StringComparer.OrdinalIgnoreCase);
             var clonedDB = new XrmDb(this.EntityMetadata, this.OnlineProxy)
             {
                 TableDict = clonedTables
@@ -271,7 +272,7 @@ namespace DG.Tools.XrmMockup.Database {
         }
         public static XrmDb RestoreSerializableDTO(XrmDb current, DbDTO model)
         {
-            var clonedTables = model.Tables.ToDictionary(x => x.Key, x => DbTable.RestoreSerializableDTO(new DbTable(current.EntityMetadata[x.Key]), x.Value));
+            var clonedTables = new Dictionary<string, DbTable>(model.Tables.ToDictionary(x => x.Key, x => DbTable.RestoreSerializableDTO(new DbTable(current.EntityMetadata[x.Key]), x.Value)), StringComparer.OrdinalIgnoreCase);
             var clonedDB = new XrmDb(current.EntityMetadata, current.OnlineProxy)
             {
                 TableDict = clonedTables

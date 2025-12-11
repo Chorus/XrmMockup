@@ -71026,7 +71026,18 @@
 			<a:ParentOptionSetName i:nil="true"/>
 		</a:OptionSetMetadataBase>
 	</OptionSets>
-	<Plugins/>
+	<Plugins>
+		<MetaPlugin>
+			<AssemblyName>TestPluginAssembly365.Plugins.TagCheckPlugin</AssemblyName>
+			<PluginTypeAssemblyName>TestPluginAssembly365</PluginTypeAssemblyName>
+			<MessageName>Create</MessageName>
+			<PrimaryEntity>contact</PrimaryEntity>
+			<Stage>20</Stage>
+			<Mode>0</Mode>
+			<Rank>1</Rank>
+			<Name>TagCheckPlugin</Name>
+		</MetaPlugin>
+	</Plugins>
 	<RootBusinessUnit xmlns:a="http://schemas.microsoft.com/xrm/2011/Contracts">
 		<a:Attributes xmlns:b="http://schemas.datacontract.org/2004/07/System.Collections.Generic">
 			<a:KeyValuePairOfstringanyType>
