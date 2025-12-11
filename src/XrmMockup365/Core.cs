@@ -162,10 +162,10 @@ namespace DG.Tools.XrmMockup
         /// <returns></returns>
         public static StaticMetadataCache BuildStaticMetadataCache(XrmMockupSettings settings)
         {
-            var metadataDirectory = settings.MetadataDirectoryPath ?? "../../Metadata/";
-            var metadata = Utility.GetMetadata(metadataDirectory);
-            var workflows = Utility.GetWorkflows(metadataDirectory);
-            var securityRoles = Utility.GetSecurityRoles(metadataDirectory);
+            var metadataDirectories = settings.MetadataDirectoryPaths ?? new List<string> { settings.MetadataDirectoryPath ?? "../../Metadata/" };
+            var metadata = Utility.GetMetadata(metadataDirectories);
+            var workflows = Utility.GetWorkflows(metadataDirectories);
+            var securityRoles = Utility.GetSecurityRoles(metadataDirectories);
 
             var baseCurrency = metadata.BaseOrganization.GetAttributeValue<EntityReference>("basecurrencyid");
             var baseCurrencyPrecision = metadata.BaseOrganization.GetAttributeValue<int>("pricingdecimalprecision");
@@ -307,6 +307,7 @@ namespace DG.Tools.XrmMockup
             var rootBu = CloneEntity(metadata.RootBusinessUnit);
             rootBu["name"] = "RootBusinessUnit";
             rootBu.Attributes.Remove("organizationid");
+            Console.WriteLine($"[Core.InitializeDB] Adding RootBusinessUnit: {rootBu.Id} ({rootBu.LogicalName})");
             this.db.Add(rootBu, false);
             this.RootBusinessUnitRef = rootBu.ToEntityReference();
 
@@ -320,6 +321,7 @@ namespace DG.Tools.XrmMockup
             admin["firstname"] = "";
             admin["lastname"] = "SYSTEM";
             admin["businessunitid"] = RootBusinessUnitRef;
+            Console.WriteLine($"[Core.InitializeDB] Adding Admin User: {admin.Id}, BU Ref: {RootBusinessUnitRef.Id} ({RootBusinessUnitRef.LogicalName})");
             this.db.Add(admin);
 
             // Setup default team for root business unit
@@ -1356,6 +1358,12 @@ namespace DG.Tools.XrmMockup
 
         internal EntityMetadata GetEntityMetadata(string entityLogicalName)
         {
+            if (!metadata.EntityMetadata.ContainsKey(entityLogicalName))
+            {
+                Console.WriteLine($"[Core.GetEntityMetadata] KeyNotFoundException: Metadata for entity '{entityLogicalName}' not found.");
+                // Console.WriteLine($"[Core.GetEntityMetadata] Available entities: {string.Join(", ", metadata.EntityMetadata.Keys)}");
+                throw new KeyNotFoundException($"Metadata for entity '{entityLogicalName}' not found.");
+            }
             return metadata.EntityMetadata[entityLogicalName];
         }
 

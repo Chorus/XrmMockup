@@ -19,7 +19,64 @@ namespace DG.Tools.XrmMockup {
         {
             foreach (var kvp in metadata.EntityMetadata)
             {
-                if (this.EntityMetadata.ContainsKey(kvp.Key)) continue;
+                if (this.EntityMetadata.ContainsKey(kvp.Key)) 
+                {
+                    var existing = this.EntityMetadata[kvp.Key];
+                    var incoming = kvp.Value;
+
+                    // Merge Attributes
+                    if (incoming.Attributes != null)
+                    {
+                        var existingAttributes = existing.Attributes != null 
+                            ? new List<AttributeMetadata>(existing.Attributes) 
+                            : new List<AttributeMetadata>();
+                            
+                        var existingNames = new HashSet<string>();
+                        foreach(var a in existingAttributes) existingNames.Add(a.LogicalName);
+                        
+                        bool changed = false;
+                        foreach (var attr in incoming.Attributes)
+                        {
+                            if (!existingNames.Contains(attr.LogicalName))
+                            {
+                                existingAttributes.Add(attr);
+                                existingNames.Add(attr.LogicalName);
+                                changed = true;
+                            }
+                        }
+                        
+                        if (changed)
+                        {
+                            existing.GetType().GetProperty("Attributes").SetValue(existing, existingAttributes.ToArray());
+                        }
+                    }
+
+                    // Merge OwnershipType
+                    if (!existing.OwnershipType.HasValue && incoming.OwnershipType.HasValue)
+                    {
+                        existing.GetType().GetProperty("OwnershipType").SetValue(existing, incoming.OwnershipType);
+                    }
+                    
+                    // Merge PrimaryIdAttribute
+                    if (string.IsNullOrEmpty(existing.PrimaryIdAttribute) && !string.IsNullOrEmpty(incoming.PrimaryIdAttribute))
+                    {
+                        existing.GetType().GetProperty("PrimaryIdAttribute").SetValue(existing, incoming.PrimaryIdAttribute);
+                    }
+                    
+                    // Merge PrimaryNameAttribute
+                    if (string.IsNullOrEmpty(existing.PrimaryNameAttribute) && !string.IsNullOrEmpty(incoming.PrimaryNameAttribute))
+                    {
+                        existing.GetType().GetProperty("PrimaryNameAttribute").SetValue(existing, incoming.PrimaryNameAttribute);
+                    }
+                    
+                    // Merge EntitySetName
+                    if (string.IsNullOrEmpty(existing.EntitySetName) && !string.IsNullOrEmpty(incoming.EntitySetName))
+                    {
+                        existing.GetType().GetProperty("EntitySetName").SetValue(existing, incoming.EntitySetName);
+                    }
+
+                    continue;
+                }
                 
                 this.EntityMetadata.Add(kvp.Key, kvp.Value);
 

@@ -49,6 +49,11 @@ namespace DG.Tools.XrmMockup
         public string MetadataDirectoryPath { get; set; }
 
         /// <summary>
+        /// List of paths to directories containing metadata files. If set, this takes precedence over MetadataDirectoryPath.
+        /// </summary>
+        public IEnumerable<string> MetadataDirectoryPaths { get; set; }
+
+        /// <summary>
         /// Flag for if Append And Append To privilege should be check on create and update. Default is true
         /// </summary>
         public bool? AppendAndAppendToPrivilegeCheck { get; set; }

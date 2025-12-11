@@ -857,16 +857,23 @@ namespace DG.Tools.XrmMockup
         internal static MetadataSkeleton GetMetadata(string folderLocation)
         {
             var pathToMetadata = Path.Combine(folderLocation, "Metadata.xml");
-            if (!File.Exists(pathToMetadata))
+            if (File.Exists(pathToMetadata))
             {
-                throw new ArgumentException($"Could not find metadata file at '{pathToMetadata}'." +
-                    " Be sure to run Metadata/GetMetadata.cmd to generate it after setting it up in Metadata/Config.fsx.");
+                var serializer = new DataContractSerializer(typeof(MetadataSkeleton));
+                using (var stream = new FileStream(pathToMetadata, FileMode.Open))
+                {
+                    return (MetadataSkeleton)serializer.ReadObject(stream);
+                }
             }
-            var serializer = new DataContractSerializer(typeof(MetadataSkeleton));
-            using (var stream = new FileStream(pathToMetadata, FileMode.Open))
+
+            // Check for unpacked solution
+            if (Directory.Exists(Path.Combine(folderLocation, "Entities")))
             {
-                return (MetadataSkeleton)serializer.ReadObject(stream);
+                return UnpackedMetadataParser.Parse(folderLocation);
             }
+
+            throw new ArgumentException($"Could not find metadata file at '{pathToMetadata}' or unpacked solution at '{folderLocation}'." +
+                " Be sure to run Metadata/GetMetadata.cmd to generate it after setting it up in Metadata/Config.fsx.");
         }
 
         internal static List<Entity> GetWorkflows(string folderLocation)

@@ -673,40 +673,89 @@ namespace DG.Tools.XrmMockup.Internal
         }
 
 
+        internal static MetadataSkeleton GetMetadata(IEnumerable<string> folderLocations)
+        {
+            MetadataSkeleton master = null;
+            foreach (var folder in folderLocations)
+            {
+                var current = GetMetadata(folder);
+                if (master == null)
+                {
+                    master = current;
+                }
+                else
+                {
+                    master.Merge(current);
+                }
+            }
+            return master;
+        }
+
+        internal static List<Entity> GetWorkflows(IEnumerable<string> folderLocations)
+        {
+            var workflows = new List<Entity>();
+            foreach (var folder in folderLocations)
+            {
+                workflows.AddRange(GetWorkflows(folder));
+            }
+            return workflows;
+        }
+
+        internal static List<SecurityRole> GetSecurityRoles(IEnumerable<string> folderLocations)
+        {
+            var roles = new List<SecurityRole>();
+            foreach (var folder in folderLocations)
+            {
+                roles.AddRange(GetSecurityRoles(folder));
+            }
+            return roles;
+        }
+
         internal static MetadataSkeleton GetMetadata(string folderLocation)
         {
             var pathToMetadata = Path.Combine(folderLocation, "Metadata.xml");
-            if (!File.Exists(pathToMetadata))
+            if (File.Exists(pathToMetadata))
             {
-                throw new ArgumentException($"Could not find metadata file at '{pathToMetadata}'." +
-                    " Be sure to run Metadata/GetMetadata.cmd to generate it after setting it up in Metadata/Config.fsx.");
-            }
-
-            //check for any additional metadata files
-            var metaDataFiles = Directory.GetFiles(folderLocation, "*Metadata.xml");
-
-            var master = new MetadataSkeleton();
-            var serializer = new DataContractSerializer(typeof(MetadataSkeleton));
-            using (var stream = new FileStream(pathToMetadata, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                master = (MetadataSkeleton)serializer.ReadObject(stream);
-            }
-
-            foreach (var file in metaDataFiles.Where(x => Path.GetFileName(x) != Path.GetFileName(pathToMetadata)))
-            {
-                serializer = new DataContractSerializer(typeof(MetadataSkeleton));
-                using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+                var master = new MetadataSkeleton();
+                var serializer = new DataContractSerializer(typeof(MetadataSkeleton));
+                using (var stream = new FileStream(pathToMetadata, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    master.Merge((MetadataSkeleton)serializer.ReadObject(stream));
+                    master = (MetadataSkeleton)serializer.ReadObject(stream);
                 }
+
+                //check for any additional metadata files
+                var metaDataFiles = Directory.GetFiles(folderLocation, "*Metadata.xml");
+
+                foreach (var file in metaDataFiles.Where(x => Path.GetFileName(x) != Path.GetFileName(pathToMetadata)))
+                {
+                    serializer = new DataContractSerializer(typeof(MetadataSkeleton));
+                    using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        master.Merge((MetadataSkeleton)serializer.ReadObject(stream));
+                    }
+                }
+                
+                Console.WriteLine($"[Utility] Loaded Metadata.xml. Contains 'businessunit': {master.EntityMetadata.ContainsKey("businessunit")}");
+                UnpackedMetadataParser.EnsureSystemEntities(master);
+                Console.WriteLine($"[Utility] After EnsureSystemEntities. Contains 'businessunit': {master.EntityMetadata.ContainsKey("businessunit")}");
+                return master;
             }
 
-            return master;
+            // Check for unpacked solution
+            if (Directory.Exists(Path.Combine(folderLocation, "Entities")))
+            {
+                return UnpackedMetadataParser.Parse(folderLocation);
+            }
+
+            throw new ArgumentException($"Could not find metadata file at '{pathToMetadata}' or unpacked solution at '{folderLocation}'." +
+                " Be sure to run Metadata/GetMetadata.cmd to generate it after setting it up in Metadata/Config.fsx.");
         }
 
         internal static List<Entity> GetWorkflows(string folderLocation)
         {
             var pathToWorkflows = Path.Combine(folderLocation, "Workflows");
+            if (!Directory.Exists(pathToWorkflows)) return new List<Entity>();
+
             var files = Directory.GetFiles(pathToWorkflows, "*.xml");
             var workflows = new List<Entity>();
             foreach (var file in files)
@@ -718,6 +767,21 @@ namespace DG.Tools.XrmMockup.Internal
 
         internal static Entity GetWorkflow(string path)
         {
+            try
+            {
+                using (var reader = System.Xml.XmlReader.Create(path))
+                {
+                    if (reader.MoveToContent() == System.Xml.XmlNodeType.Element && reader.Name == "Workflow")
+                    {
+                        return UnpackedMetadataParser.ParseWorkflow(path);
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore and try DataContractSerializer
+            }
+
             var serializer = new DataContractSerializer(typeof(Entity));
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -728,6 +792,8 @@ namespace DG.Tools.XrmMockup.Internal
         internal static List<SecurityRole> GetSecurityRoles(string folderLocation)
         {
             var pathToSecurity = Path.Combine(folderLocation, "SecurityRoles");
+            if (!Directory.Exists(pathToSecurity)) return new List<SecurityRole>();
+
             var files = Directory.GetFiles(pathToSecurity, "*.xml");
             var securityRoles = new List<SecurityRole>();
 
@@ -830,28 +896,51 @@ namespace DG.Tools.XrmMockup.Internal
         {
             if (metadataAtt is PicklistAttributeMetadata picklistAttributeMetadata)
             {
+                if (picklistAttributeMetadata.OptionSet == null)
+                {
+                    // OptionSet metadata missing, cannot format
+                    return (value as OptionSetValue)?.Value.ToString();
+                }
+
+                var optionSetValue = value as OptionSetValue;
+                if (optionSetValue == null)
+                {
+                     // Value is not OptionSetValue (e.g. int), cannot format properly without casting
+                     if (value is int i) optionSetValue = new OptionSetValue(i);
+                     else return value?.ToString();
+                }
+
                 var optionset = picklistAttributeMetadata.OptionSet.Options
-                    .FirstOrDefault(opt => opt.Value == (value as OptionSetValue).Value);
+                    .FirstOrDefault(opt => opt.Value == optionSetValue.Value);
 
                 return optionset == null
-                    ? throw new MockupException($"Value '{(value as OptionSetValue).Value}' for attribute '{attrName}' on entity '{entity.LogicalName}' not found in OptionSet '{picklistAttributeMetadata.OptionSet.Name}'")
-                    : optionset.Label.UserLocalizedLabel.Label;
+                    ? throw new MockupException($"Value '{optionSetValue.Value}' for attribute '{attrName}' on entity '{entity.LogicalName}' not found in OptionSet '{picklistAttributeMetadata.OptionSet.Name}'")
+                    : optionset.Label?.UserLocalizedLabel?.Label ?? optionset.Label?.LocalizedLabels?.FirstOrDefault()?.Label ?? optionSetValue.Value.ToString();
             }
 
             if (metadataAtt is BooleanAttributeMetadata booleanAttributeMetadata)
             {
                 var booleanOptions = booleanAttributeMetadata.OptionSet;
+                if (booleanOptions == null) return value.ToString();
+
                 var label = (bool)value ? booleanOptions.TrueOption.Label : booleanOptions.FalseOption.Label;
                 return label.UserLocalizedLabel.Label;
             }
 
             if (metadataAtt is MoneyAttributeMetadata)
             {
-                var currencysymbol =
-                    db.GetEntity(
-                        db.GetEntity(entity.ToEntityReference())
-                        .GetAttributeValue<EntityReference>("transactioncurrencyid"))
-                    .GetAttributeValue<string>("currencysymbol");
+                var dbEntity = db.GetEntity(entity.ToEntityReference());
+                var transactionCurrencyRef = dbEntity.GetAttributeValue<EntityReference>("transactioncurrencyid");
+                
+                string currencysymbol = "$"; // Default
+                if (transactionCurrencyRef != null)
+                {
+                    var currency = db.GetEntity(transactionCurrencyRef);
+                    if (currency != null)
+                    {
+                        currencysymbol = currency.GetAttributeValue<string>("currencysymbol");
+                    }
+                }
 
                 return currencysymbol + (value as Money).Value.ToString();
             }

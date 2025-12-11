@@ -71,20 +71,29 @@ namespace DG.Tools.XrmMockup
 
                 if (queryExpr.LinkEntities.Count > 0)
                 {
-                    //foreach (var linkEntity in queryExpr.LinkEntities)
-                    Parallel.ForEach(queryExpr.LinkEntities, linkEntity =>
+                    var currentResults = new List<Entity> { toAdd };
+                    foreach (var linkEntity in queryExpr.LinkEntities)
                     {
-                        var alliasedValues = GetAliasedValuesFromLinkentity(linkEntity, entity, toAdd, db);
-                        var matchingValues = alliasedValues.Where(e => EntityMatcher.MatchesCriteria(e, queryExpr.Criteria));
-                        Parallel.ForEach(matchingValues, m =>
+                        var nextResults = new List<Entity>();
+                        foreach (var res in currentResults)
+                        {
+                            var alliasedValues = GetAliasedValuesFromLinkentity(linkEntity, entity, res, db);
+                            nextResults.AddRange(alliasedValues);
+                        }
+                        currentResults = nextResults;
+                    }
+
+                    foreach (var m in currentResults)
+                    {
+                        if (EntityMatcher.MatchesCriteria(m, queryExpr.Criteria))
                         {
                             if (security.HasPermission(m, AccessRights.ReadAccess, userRef))
                             {
                                 Utility.SetFormattedValues(db, m, entityMetadata);
                                 collection.Add(new KeyValuePair<DbRow, Entity>(row, m));
                             }
-                        });
-                    });
+                        }
+                    }
                 }
                 else if (EntityMatcher.MatchesCriteria(toAdd, queryExpr.Criteria))
                 {
@@ -187,16 +196,21 @@ namespace DG.Tools.XrmMockup
 
                         if (linkEntity.LinkEntities.Count > 0)
                         {
-                            var subEntities = new List<Entity>();
+                            var currentResults = new List<Entity> { aliasedEntity };
                             foreach (var nestedLinkEntity in linkEntity.LinkEntities)
                             {
                                 nestedLinkEntity.LinkFromEntityName = linkEntity.LinkToEntityName;
-                                var alliasedLinkValues = GetAliasedValuesFromLinkentity(
-                                        nestedLinkEntity, linkedEntity, aliasedEntity, db);
-                                subEntities.AddRange(alliasedLinkValues
-                                        .Where(e => EntityMatcher.MatchesCriteria(e, linkEntity.LinkCriteria)));
+                                var nextResults = new List<Entity>();
+                                foreach (var res in currentResults)
+                                {
+                                    var alliasedLinkValues = GetAliasedValuesFromLinkentity(
+                                            nestedLinkEntity, linkedEntity, res, db);
+                                    nextResults.AddRange(alliasedLinkValues);
+                                }
+                                currentResults = nextResults;
                             }
-                            collection.AddRange(subEntities);
+                            collection.AddRange(currentResults
+                                    .Where(e => EntityMatcher.MatchesCriteria(e, linkEntity.LinkCriteria)));
                         }
                         else if (EntityMatcher.MatchesCriteria(aliasedEntity, linkEntity.LinkCriteria))
                         {
